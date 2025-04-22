@@ -6,548 +6,425 @@
 			name="viewport"
 			content="width=device-width, initial-scale=1.0, user-scalable=no"
 		/>
-		<title>Vertical Brick Slayer (Dark)</title>
+		<title>Infinite Vertical Brick Slayer</title>
 		<style>
-			body {
-				margin: 0;
-				padding: 0;
-				display: flex;
-				justify-content: center;
-				align-items: center;
-				height: 100vh;
-				background-color: #121212;
-				font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-				color: #e0e0e0;
-				overflow: hidden;
+			body { /* ... no changes ... */
+				margin: 0; padding: 0; display: flex; justify-content: center; align-items: center;
+				height: 100vh; background-color: #121212; font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+				color: #e0e0e0; overflow: hidden;
 			}
-			canvas {
-				border: 1px solid #444;
-				background-color: #1e1e1e;
-				display: block;
-				max-width: 100%;
-				max-height: 100vh;
+			canvas { /* ... no changes ... */
+				border: 1px solid #444; background-color: #1e1e1e; display: block;
+				max-width: 100%; max-height: 100vh;
+			}
+			.debug-text { /* ... no changes ... */
+				position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+				color: yellow; font-size: 14px; background-color: rgba(0, 0, 0, 0.5);
+				padding: 2px 5px; border-radius: 3px; z-index: 10; text-align: center;
 			}
 		</style>
 	</head>
 	<body>
+		<div id="debugIndicator" class="debug-text" style="display: none;">
+            DEBUG MODE ACTIVE (Invincible)<br>Press T to toggle / Hold T to delete bricks
+        </div>
 		<canvas id="gameCanvas" width="400" height="700"></canvas>
 
 		<script>
 			const canvas = document.getElementById("gameCanvas");
 			const ctx = canvas.getContext("2d");
+			const debugIndicator = document.getElementById("debugIndicator");
 
 			// --- Game Constants ---
 			const PADDLE_HEIGHT = 12;
 			const PADDLE_WIDTH = 90;
 			const BALL_RADIUS = 7;
-			const BRICK_ROW_COUNT = 10;
+			const BRICK_ROW_COUNT = 15;
 			const BRICK_COLUMN_COUNT = 7;
 			const BRICK_WIDTH = 45;
 			const BRICK_HEIGHT = 20;
 			const BRICK_PADDING = 4;
 			const BRICK_OFFSET_TOP = 50;
-			const BRICK_OFFSET_LEFT =
-				(canvas.width -
-					(BRICK_COLUMN_COUNT * (BRICK_WIDTH + BRICK_PADDING) -
-						BRICK_PADDING)) /
-				2;
+			const BRICK_OFFSET_LEFT = (canvas.width - (BRICK_COLUMN_COUNT * (BRICK_WIDTH + BRICK_PADDING) - BRICK_PADDING)) / 2;
+			const ROW_HEIGHT = BRICK_HEIGHT + BRICK_PADDING;
 
 			const PADDLE_SPEED = 9;
 			const INITIAL_BALL_SPEED_X = 4;
-			const INITIAL_BALL_SPEED_Y = -5; // Start upwards
+			const INITIAL_BALL_SPEED_Y = -5;
 
-			const PARTICLE_COUNT = 15; // More particles again
-			const PARTICLE_LIFE = 35; // Slightly longer life
-			const PARTICLE_SPEED_FACTOR = 2.5; // Faster burst
-			const PARTICLE_SIZE = 2.5; // Slightly larger
+			const PARTICLE_COUNT = 15;
+			const PARTICLE_LIFE = 35;
+			const PARTICLE_SPEED_FACTOR = 2.5;
+			const PARTICLE_SIZE = 2.5;
+
+            // --- Slightly shorter respawn delay ---
+			const LAUNCH_DELAY_FRAMES = 60; // Approx 1 second at 60fps
+
+            const DEBUG_DELETE_INITIAL_DELAY_MS = 1000;
+            const DEBUG_DELETE_INTERVAL_MS = 250;
+
+            // --- Animation Constants ---
+            const ROW_ANIMATION_SPEED = 4; // Pixels per frame shift speed
 
 			// --- Dark Theme Colors ---
-			const BG_COLOR = "#1e1e1e";
-			const PADDLE_COLOR = "#bdc3c7";
-			const BALL_COLOR = "#ffffff";
-			const TEXT_COLOR = "#e0e0e0";
-			const INFO_TEXT_COLOR = "#888888";
-			const GAMEOVER_COLOR = "#e74c3c";
-			const GAMEWON_COLOR = "#2ecc71"; // Green for win
-			const availableColors = [
-				"#e74c3c", "#3498db", "#2ecc71", "#f1c40f", "#9b59b6",
-				"#1abc9c", "#e67e22", "#34ace0", "#ff7f50", "#ff6b81",
-			];
+			const BG_COLOR = "#1e1e1e"; const PADDLE_COLOR = "#bdc3c7"; const BALL_COLOR = "#ffffff";
+			const TEXT_COLOR = "#e0e0e0"; const INFO_TEXT_COLOR = "#888888"; const GAMEOVER_COLOR = "#e74c3c";
+            const PAUSE_COLOR = "#3498db";
+			const availableColors = [ "#e74c3c", "#3498db", "#2ecc71", "#f1c40f", "#9b59b6", "#1abc9c", "#e67e22", "#34ace0", "#ff7f50", "#ff6b81"];
 
 			// --- Game State Variables ---
-			let ball = {};
-			let paddle = {};
-			let bricks = [];
-			let particles = [];
-			let score = 0;
-			let lives = 3;
-			let isGameOver = false;
-			let isGameWon = false;
-			let animationFrameId;
-			let rightPressed = false;
-			let leftPressed = false;
+			let ball = {}; let paddle = {}; let bricks = []; let particles = [];
+			let score = 0; let lives = 3; let isGameOver = false;
+			let animationFrameId; let rightPressed = false; let leftPressed = false;
+			let rowsAdvanced = 0;
+
+            let isPaused = false; let waitingToLaunch = true; let launchDelayTimer = 0;
+
+            // --- Debug State ---
+            let isDebugMode = false; let isTKeyDown = false; let tKeyDownStartTime = 0; let lastBrickDeleteTime = 0;
+
+            // --- Animation State ---
+            let isAnimatingRows = false; // Is the row shift animation playing?
+            let animationTargetY = 0;   // Total Y distance to shift
+            let animationCurrentY = 0;  // Current Y offset during animation
+            let rowsToShiftAmount = 0;  // How many rows need to be generated after animation
+
 
 			// --- Initialization ---
 			function initGame() {
-				score = 0;
-				lives = 3;
-				isGameOver = false;
-				isGameWon = false;
-				particles = []; // Clear particles on restart
-				rightPressed = false;
-				leftPressed = false;
+				score = 0; rowsAdvanced = 0; lives = 3; isGameOver = false; isPaused = false;
+				// isDebugMode persists
+				particles = []; rightPressed = false; leftPressed = false;
+                isTKeyDown = false; tKeyDownStartTime = 0; lastBrickDeleteTime = 0;
+                isAnimatingRows = false; // Reset animation state
+                animationTargetY = 0; animationCurrentY = 0; rowsToShiftAmount = 0;
 
-				ball = {
-					x: canvas.width / 2,
-					y: canvas.height - 80, // Start a bit above paddle area
-					dx: INITIAL_BALL_SPEED_X * (Math.random() < 0.5 ? 1 : -1),
-					dy: INITIAL_BALL_SPEED_Y,
-					radius: BALL_RADIUS,
-					color: BALL_COLOR,
-				};
+                resetBallForLaunch();
 
-                // Set paddle initial position only if it's the very first init
-                if (paddle.x === undefined) {
-				    paddle.x = (canvas.width - PADDLE_WIDTH) / 2;
-                }
-                // Always reset Y position and properties
+				if (paddle.x === undefined) paddle.x = (canvas.width - PADDLE_WIDTH) / 2;
 				paddle.y = canvas.height - PADDLE_HEIGHT - 20;
-				paddle.width = PADDLE_WIDTH;
-				paddle.height = PADDLE_HEIGHT;
-				paddle.color = PADDLE_COLOR;
+				paddle.width = PADDLE_WIDTH; paddle.height = PADDLE_HEIGHT; paddle.color = PADDLE_COLOR;
 
-				// Bricks setup
 				bricks = [];
 				for (let c = 0; c < BRICK_COLUMN_COUNT; c++) {
 					bricks[c] = [];
 					for (let r = 0; r < BRICK_ROW_COUNT; r++) {
-						const brickX =
-							c * (BRICK_WIDTH + BRICK_PADDING) +
-							BRICK_OFFSET_LEFT;
-						const brickY =
-							r * (BRICK_HEIGHT + BRICK_PADDING) +
-							BRICK_OFFSET_TOP;
-						bricks[c][r] = {
-							x: brickX,
-							y: brickY,
-							width: BRICK_WIDTH,
-							height: BRICK_HEIGHT,
-							status: 1, // 1: active, 0: broken
-							color: availableColors[
-								Math.floor(
-									Math.random() * availableColors.length
-								)
-							],
-						};
+						bricks[c][r] = createBrick(c, r);
 					}
 				}
 
-				// Ensure the game loop starts if it was stopped by game over/win
-				if (!animationFrameId || isGameOver || isGameWon) {
-					if (animationFrameId) cancelAnimationFrame(animationFrameId); // Stop previous loop if any
+				if (!animationFrameId || isGameOver) {
+					if (animationFrameId) cancelAnimationFrame(animationFrameId);
+                    animationFrameId = null;
 					gameLoop();
 				}
 			}
 
-			// --- Drawing Functions ---
-			function drawBall() {
-				ctx.beginPath();
-				ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
-				ctx.fillStyle = ball.color;
-				ctx.fill();
-				ctx.closePath();
-			}
+            function resetBallForLaunch(keepCurrentPos = false) { /* ... no changes ... */
+                 if (!keepCurrentPos) { ball.x = canvas.width / 2; ball.y = canvas.height - 80; }
+                 ball.dx = 0; ball.dy = 0; ball.radius = BALL_RADIUS; ball.color = BALL_COLOR;
+                 waitingToLaunch = true; launchDelayTimer = LAUNCH_DELAY_FRAMES;
+            }
+            function createBrick(c, r) { /* ... no changes ... */
+                const brickX = c * (BRICK_WIDTH + BRICK_PADDING) + BRICK_OFFSET_LEFT;
+                const brickY = r * ROW_HEIGHT + BRICK_OFFSET_TOP;
+                const colorIndex = Math.floor(Math.random() * availableColors.length);
+                return { x: brickX, y: brickY, width: BRICK_WIDTH, height: BRICK_HEIGHT, status: 1, color: availableColors[colorIndex] };
+            }
 
-			function drawPaddle() {
-				if (paddle.x === undefined) return; // Don't draw before initialized
-				// Draw rounded paddle
-				ctx.beginPath();
-                ctx.lineCap = "round";
-				ctx.lineWidth = paddle.height;
+			// --- Drawing Functions ---
+			function drawBall() { /* ... no changes ... */
+				ctx.beginPath(); ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2); ctx.fillStyle = ball.color; ctx.fill(); ctx.closePath(); }
+			function drawPaddle() { /* ... no changes ... */
+				if (paddle.x === undefined) return;
+				ctx.beginPath(); ctx.lineCap = "round"; ctx.lineWidth = paddle.height;
 				ctx.moveTo(paddle.x + paddle.height / 2, paddle.y + paddle.height / 2);
 				ctx.lineTo(paddle.x + paddle.width - paddle.height / 2, paddle.y + paddle.height / 2);
-				ctx.strokeStyle = paddle.color;
-				ctx.stroke();
-				ctx.closePath();
-			}
+				ctx.strokeStyle = paddle.color; ctx.stroke(); ctx.closePath(); }
 
 			function drawBricks() {
+                // Calculate current Y offset for drawing during animation
+                const yOffset = isAnimatingRows ? animationCurrentY : 0;
+
 				for (let c = 0; c < BRICK_COLUMN_COUNT; c++) {
 					for (let r = 0; r < BRICK_ROW_COUNT; r++) {
-						if (bricks[c][r].status === 1) {
+						// Draw existing bricks at their position + animation offset
+						if (bricks[c] && bricks[c][r] && bricks[c][r].status === 1) {
 							const brick = bricks[c][r];
 							ctx.beginPath();
 							ctx.rect(
 								brick.x,
-								brick.y,
+								brick.y + yOffset, // Apply animation offset here for drawing
 								brick.width,
 								brick.height
 							);
 							ctx.fillStyle = brick.color;
 							ctx.fill();
 							ctx.closePath();
-                            // Optional: subtle border for definition
 							ctx.strokeStyle = "rgba(0, 0, 0, 0.2)";
 							ctx.lineWidth = 1;
-							ctx.strokeRect(
-								brick.x,
-								brick.y,
-								brick.width,
-								brick.height
-							);
+							ctx.strokeRect(brick.x, brick.y + yOffset, brick.width, brick.height);
 						}
 					}
 				}
+                // Draw newly generated bricks at the top *only* if not animating (they appear instantly after animation)
+                // This prevents drawing them while they are technically at row 0 but should be off-screen during anim
+                if (!isAnimatingRows && rowsToShiftAmount > 0) {
+                    // This part is now handled by the main loop drawing existing bricks after the shift completes
+                    // We don't need special drawing logic for *new* bricks here.
+                }
 			}
-
-			function drawScore() {
-				ctx.font = '18px "Segoe UI", sans-serif';
-				ctx.fillStyle = TEXT_COLOR;
-				ctx.fillText("Score: " + score, 15, 30);
-			}
-
-			function drawLives() {
-				ctx.font = '18px "Segoe UI", sans-serif';
-				ctx.fillStyle = TEXT_COLOR;
-				ctx.fillText("Lives: " + lives, canvas.width - 80, 30);
-			}
-
-			function drawParticles() {
-				particles.forEach((p, index) => { // Added index for potential splice later if needed
-					ctx.beginPath();
-					ctx.rect(
-						p.x - p.size / 2,
-						p.y - p.size / 2,
-						p.size,
-						p.size
-					);
-					ctx.fillStyle = p.color;
-					ctx.globalAlpha = Math.max(0, p.life / PARTICLE_LIFE); // Fade out
-					ctx.fill();
-					ctx.closePath();
+			function drawScore() { /* ... no changes ... */
+				ctx.font = '18px "Segoe UI", sans-serif'; ctx.fillStyle = TEXT_COLOR; ctx.fillText("Rows Cleared: " + score, 15, 30); }
+			function drawLives() { /* ... no changes ... */
+				ctx.font = '18px "Segoe UI", sans-serif'; ctx.fillStyle = TEXT_COLOR; ctx.fillText("Lives: " + lives, canvas.width - 80, 30); }
+			function drawParticles() { /* ... no changes ... */
+				particles.forEach((p) => {
+					ctx.beginPath(); ctx.rect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+					ctx.fillStyle = p.color; ctx.globalAlpha = Math.max(0, p.life / PARTICLE_LIFE);
+					ctx.fill(); ctx.closePath();
 				});
-				ctx.globalAlpha = 1.0; // Reset global alpha
-			}
-
-			function drawMessage(message, color) {
-				ctx.font = 'bold 32px "Segoe UI", sans-serif';
-				ctx.fillStyle = color;
-				ctx.textAlign = "center";
+				ctx.globalAlpha = 1.0; }
+			function drawMessage(message, color) { /* ... no changes ... */
+				ctx.font = 'bold 32px "Segoe UI", sans-serif'; ctx.fillStyle = color; ctx.textAlign = "center";
 				ctx.fillText(message, canvas.width / 2, canvas.height / 2 - 40);
-
-				ctx.font = '18px "Segoe UI", sans-serif';
-				ctx.fillStyle = INFO_TEXT_COLOR;
-				ctx.fillText(
-					"Press SPACE to Restart",
-					canvas.width / 2,
-					canvas.height / 2
-				);
-				ctx.textAlign = "left"; // Reset alignment
-			}
+				ctx.font = '18px "Segoe UI", sans-serif'; ctx.fillStyle = INFO_TEXT_COLOR;
+				ctx.fillText("Press SPACE to Restart", canvas.width / 2, canvas.height / 2);
+				ctx.textAlign = "left"; }
+            function drawPauseMessage() { /* ... no changes ... */
+                ctx.font = 'bold 36px "Segoe UI", sans-serif'; ctx.fillStyle = PAUSE_COLOR; ctx.textAlign = "center";
+				ctx.fillText("PAUSED", canvas.width / 2, canvas.height / 2 - 40);
+				ctx.font = '20px "Segoe UI", sans-serif'; ctx.fillStyle = INFO_TEXT_COLOR;
+				ctx.fillText("Press ESC to Resume", canvas.width / 2, canvas.height / 2);
+				ctx.textAlign = "left"; }
 
 			// --- Update & Collision Logic ---
 
             function updatePaddle() {
-                // Paddle movement should only happen if game is active
-                if (isGameOver || isGameWon) return;
+                // Pause during row animation
+                if (isPaused || isGameOver || waitingToLaunch || isAnimatingRows) return;
+                if (leftPressed) paddle.x -= PADDLE_SPEED;
+                else if (rightPressed) paddle.x += PADDLE_SPEED;
+                paddle.x = Math.max(0, Math.min(paddle.x, canvas.width - paddle.width));
+            }
 
-                if (leftPressed) {
-                    paddle.x -= PADDLE_SPEED;
-                } else if (rightPressed) {
-                    paddle.x += PADDLE_SPEED;
+            function updateLaunchDelay() {
+                 // Pause during row animation
+                if (waitingToLaunch && !isPaused && !isGameOver && !isAnimatingRows) {
+                    launchDelayTimer--;
+                    if (launchDelayTimer <= 0) {
+                        waitingToLaunch = false;
+                        ball.dx = INITIAL_BALL_SPEED_X * (Math.random() < 0.5 ? 1 : -1);
+                        ball.dy = INITIAL_BALL_SPEED_Y;
+                    }
                 }
-                // Keep paddle within bounds
-                paddle.x = Math.max(
-                    0,
-                    Math.min(paddle.x, canvas.width - paddle.width)
-                );
             }
 
             function updateBall() {
-                // Don't update ball if game is over or won
-                if (isGameOver || isGameWon) return;
+                // Pause during row animation
+                if (isPaused || isGameOver || waitingToLaunch || isAnimatingRows) return;
 
-                // Calculate next potential position
-                let nextX = ball.x + ball.dx;
-                let nextY = ball.y + ball.dy;
-
-                // --- Wall collisions (left/right/top) ---
-                if (nextX > canvas.width - ball.radius || nextX < ball.radius) {
-                    ball.dx = -ball.dx;
-                    // Adjust position slightly to prevent sticking
-                    if (nextX > canvas.width - ball.radius) ball.x = canvas.width - ball.radius;
-                    if (nextX < ball.radius) ball.x = ball.radius;
-                    // Recalculate nextX after bounce if necessary for subsequent checks
-                    nextX = ball.x + ball.dx;
-                }
-                if (nextY < ball.radius) {
-                    ball.dy = -ball.dy;
-                    // Adjust position slightly
-                    if (nextY < ball.radius) ball.y = ball.radius;
-                    // Recalculate nextY
-                    nextY = ball.y + ball.dy;
-                }
-
-                // --- Paddle Collision Check ---
-                // Check specifically if the ball is moving downwards AND will intersect the paddle area
-                // Note: We check the *next* position (nextY) against the paddle's top edge.
-                else if (ball.dy > 0 && // Must be moving downwards
-                         nextY + ball.radius > paddle.y && // Ball's next bottom edge will be below paddle's top edge
-                         ball.y + ball.radius <= paddle.y && // Ball's *current* bottom edge is at or above paddle top (prevents collision if starting inside)
-                         nextX + ball.radius > paddle.x && // Ball's next horizontal position overlaps paddle
-                         nextX - ball.radius < paddle.x + paddle.width) // Ball's next horizontal position overlaps paddle
-                 {
-                    paddleCollision(); // Handle the bounce logic (reverses dy, adjusts dx, corrects y)
-                    // After paddleCollision, dy is negative, dx might change, y is corrected.
-                    // The position update at the end will handle the actual move away from the paddle.
-                 }
-
-                // --- Bottom Edge / Life Loss Check ---
-                // This check now happens *only if* the paddle collision didn't occur.
+                let nextX = ball.x + ball.dx; let nextY = ball.y + ball.dy;
+                // Wall collisions
+                if (nextX > canvas.width - ball.radius || nextX < ball.radius) { ball.dx = -ball.dx; if (nextX > canvas.width - ball.radius) ball.x = canvas.width - ball.radius; if (nextX < ball.radius) ball.x = ball.radius; nextX = ball.x + ball.dx; }
+                if (nextY < ball.radius) { ball.dy = -ball.dy; if (nextY < ball.radius) ball.y = ball.radius; nextY = ball.y + ball.dy; }
+                // Paddle Collision
+                else if (ball.dy > 0 && nextY + ball.radius > paddle.y && ball.y + ball.radius <= paddle.y && nextX + ball.radius > paddle.x && nextX - ball.radius < paddle.x + paddle.width) { paddleCollision(); }
+                // Bottom Edge / Life Loss
                 else if (nextY > canvas.height - ball.radius) {
+                    if (isDebugMode) { console.log("Debug: Bottom hit prevented life loss."); resetBallForLaunch(); return; }
                     lives--;
-                    if (lives <= 0) {
-                        isGameOver = true;
-                        // Stop ball for game over screen
-                        ball.dx = 0;
-                        ball.dy = 0;
-                        ball.x = canvas.width / 2;
-                        ball.y = canvas.height / 2 + 50;
-                        // No further position update needed this frame
-                        return; // Exit early as the game is over
-                    } else {
-                        // Reset ball position for the next life
-                        ball.x = canvas.width / 2;
-                        ball.y = canvas.height - 80; // Reset higher up
-                        ball.dx = INITIAL_BALL_SPEED_X * (Math.random() < 0.5 ? 1 : -1);
-                        ball.dy = INITIAL_BALL_SPEED_Y; // Reset speed upwards
-                        // No further position update needed this frame
-                        return; // Exit early as the ball position is reset
-                    }
+                    if (lives <= 0) { isGameOver = true; ball.dx = 0; ball.dy = 0; ball.x = canvas.width / 2; ball.y = canvas.height / 2 + 50; return; }
+                    else { resetBallForLaunch(); return; }
                 }
-
-                // --- Update ball position ---
-                // This happens if no wall bounce, no paddle bounce, and no life loss occurred.
-                ball.x += ball.dx;
-                ball.y += ball.dy;
+                // Update position
+                ball.x += ball.dx; ball.y += ball.dy;
             }
 
-
-            function paddleCollision() {
-                 // We know ball.dy > 0 because of the check in updateBall
-                ball.dy = -ball.dy; // Reverse vertical direction
-
-                // Calculate where the ball hit the paddle relative to the paddle center
-                let collidePoint = ball.x - (paddle.x + paddle.width / 2);
-
-                // Adjust horizontal speed based on collision point
-                // A larger multiplier makes the angle more sensitive to hit location
-                ball.dx = collidePoint * 0.15;
-
-                // Clamp the horizontal speed to prevent extreme angles
-                const maxPaddleBounceDx = Math.abs(INITIAL_BALL_SPEED_X) * 2.2;
-                ball.dx = Math.max(-maxPaddleBounceDx, Math.min(maxPaddleBounceDx, ball.dx));
-
-                 // --- Crucial Correction ---
-                 // Place the ball slightly above the paddle to prevent it from getting stuck
-                 // or triggering collision again immediately in the next frame.
-                 ball.y = paddle.y - ball.radius - 0.1;
-            }
+            function paddleCollision() { /* ... no changes ... */
+                if (ball.dy <= 0) return; ball.dy = -ball.dy; let collidePoint = ball.x - (paddle.x + paddle.width / 2);
+                ball.dx = collidePoint * 0.15; const maxPaddleBounceDx = Math.abs(INITIAL_BALL_SPEED_X) * 2.2;
+                ball.dx = Math.max(-maxPaddleBounceDx, Math.min(maxPaddleBounceDx, ball.dx)); ball.y = paddle.y - ball.radius - 0.1; }
 
 			function brickCollision() {
-                // Don't check collisions if game over/won
-                 if (isGameOver || isGameWon) return;
-
-				// No need to cache totalBricks if checking status directly for win condition
-
-				for (let c = 0; c < BRICK_COLUMN_COUNT; c++) {
+                 // Pause during row animation
+                 if (isPaused || isGameOver || waitingToLaunch || isAnimatingRows) return false;
+                 let collisionOccurred = false;
+				 for (let c = 0; c < BRICK_COLUMN_COUNT; c++) {
 					for (let r = 0; r < BRICK_ROW_COUNT; r++) {
-						const brick = bricks[c][r];
-						if (brick.status === 1) {
-                            // Simple center-point collision check for pass-through effect
-							if (
-								ball.x > brick.x &&
-								ball.x < brick.x + brick.width &&
-								ball.y > brick.y &&
-								ball.y < brick.y + brick.height
-							) {
-								brick.status = 0;
-								score++;
-								createShatterEffect(
-									brick.x + brick.width / 2,
-									brick.y + brick.height / 2,
-									brick.color
-								);
-
-								// Check for win condition by counting remaining bricks
-                                let remainingBricks = 0;
-                                for (let cc = 0; cc < BRICK_COLUMN_COUNT; cc++) {
-                                    for (let rr = 0; rr < BRICK_ROW_COUNT; rr++) {
-                                        if (bricks[cc][rr].status === 1) {
-                                            remainingBricks++;
-                                        }
-                                    }
-                                }
-
-                                if (remainingBricks === 0) {
-                                    isGameWon = true;
-                                    ball.dx = 0; // Stop ball
-                                    ball.dy = 0;
-                                    ball.x = canvas.width / 2; // Center for win screen
-                                    ball.y = canvas.height / 2 + 50;
-                                    return; // Exit function early, game won
-                                }
+                        if (bricks[c] && bricks[c][r] && bricks[c][r].status === 1) {
+                            const brick = bricks[c][r];
+							if ( ball.x > brick.x && ball.x < brick.x + brick.width && ball.y > brick.y && ball.y < brick.y + brick.height ) {
+								brick.status = 0; createShatterEffect(brick.x + brick.width / 2, brick.y + brick.height / 2, brick.color);
+                                collisionOccurred = true;
 							}
 						}
 					}
 				}
+                return collisionOccurred;
 			}
 
-			function createShatterEffect(x, y, color) {
-				for (let i = 0; i < PARTICLE_COUNT; i++) {
-					particles.push({
-						x: x,
-						y: y,
-						dx: (Math.random() - 0.5) * PARTICLE_SPEED_FACTOR * 2,
-						dy: (Math.random() - 0.5) * PARTICLE_SPEED_FACTOR * 2,
-						life: PARTICLE_LIFE + Math.random() * 10, // Vary life slightly
-						color: color,
-						size: PARTICLE_SIZE + Math.random() * 1, // Vary size slightly
-					});
-				}
-			}
+            function checkAndShiftRows() {
+                // Don't check if paused, game over, or already animating
+                if (isPaused || isGameOver || isAnimatingRows) return;
 
-			function updateParticles() {
-				for (let i = particles.length - 1; i >= 0; i--) {
-					const p = particles[i];
-					p.x += p.dx;
-					p.y += p.dy;
-					p.dy += 0.06; // Simple gravity
-					p.life--;
+                let lowestActiveRow = -1;
+                for (let r = BRICK_ROW_COUNT - 1; r >= 0; r--) {
+                    for (let c = 0; c < BRICK_COLUMN_COUNT; c++) {
+                        if (bricks[c] && bricks[c][r] && bricks[c][r].status === 1) {
+                            lowestActiveRow = r; break;
+                        }
+                    }
+                    if (lowestActiveRow !== -1) break;
+                }
+                const shiftAmount = (lowestActiveRow === -1) ? BRICK_ROW_COUNT : (BRICK_ROW_COUNT - 1) - lowestActiveRow;
 
-					// Remove particle if life is up
-					if (p.life <= 0) {
-						particles.splice(i, 1);
-					}
-				}
-			}
+                if (shiftAmount > 0) {
+                    // --- Start Animation Instead of Instant Shift ---
+                    score += shiftAmount; rowsAdvanced += shiftAmount; // Score immediately
+
+                    isAnimatingRows = true;
+                    rowsToShiftAmount = shiftAmount; // Store how many rows to generate later
+                    animationTargetY = shiftAmount * ROW_HEIGHT; // Calculate target distance
+                    animationCurrentY = 0; // Reset current animation progress
+                    // The actual data shift happens after animation in updateRowAnimation()
+                }
+            }
+
+            // --- NEW: Update Row Animation ---
+            function updateRowAnimation() {
+                if (!isAnimatingRows) return;
+
+                animationCurrentY += ROW_ANIMATION_SPEED;
+
+                // Check if animation is complete
+                if (animationCurrentY >= animationTargetY) {
+                    animationCurrentY = animationTargetY; // Clamp to target
+
+                    // --- Perform the Actual Data Shift ---
+                    // Shift existing bricks down in the array
+                    for (let r = BRICK_ROW_COUNT - 1; r >= 0 ; r--) { // Iterate carefully bottom-up within columns
+                        for (let c = 0; c < BRICK_COLUMN_COUNT; c++) {
+                           const sourceRow = r;
+                           const targetRow = r + rowsToShiftAmount;
+
+                           if (targetRow < BRICK_ROW_COUNT) { // Make sure target is within bounds
+                                if (bricks[c]) { // Check if column exists
+                                     if (bricks[c][sourceRow]) { // Check if source brick exists
+                                         bricks[c][targetRow] = bricks[c][sourceRow];
+                                         // Update the actual Y coordinate now the animation is done
+                                         bricks[c][targetRow].y = targetRow * ROW_HEIGHT + BRICK_OFFSET_TOP;
+                                     } else {
+                                         // If source was empty, ensure target is also empty (or null)
+                                         bricks[c][targetRow] = null; // Or undefined, depends on preference
+                                     }
+                                }
+                           }
+                        }
+                    }
+
+                    // Generate new bricks for the top 'rowsToShiftAmount' rows
+                    for (let r = 0; r < rowsToShiftAmount; r++) {
+                        for (let c = 0; c < BRICK_COLUMN_COUNT; c++) {
+                            if (!bricks[c]) bricks[c] = []; // Ensure column exists
+                            bricks[c][r] = createBrick(c, r); // Create new brick at the correct final position
+                        }
+                    }
+
+                    // --- Finish Animation ---
+                    isAnimatingRows = false;
+                    animationTargetY = 0;
+                    animationCurrentY = 0;
+                    rowsToShiftAmount = 0;
+                }
+            }
+
+
+			function createShatterEffect(x, y, color) { /* ... no changes ... */
+				for (let i = 0; i < PARTICLE_COUNT; i++) { particles.push({ x: x, y: y, dx: (Math.random() - 0.5) * PARTICLE_SPEED_FACTOR * 2, dy: (Math.random() - 0.5) * PARTICLE_SPEED_FACTOR * 2, life: PARTICLE_LIFE + Math.random() * 10, color: color, size: PARTICLE_SIZE + Math.random() * 1 }); } }
+			function updateParticles() { /* ... no changes ... */
+				for (let i = particles.length - 1; i >= 0; i--) { const p = particles[i]; p.x += p.dx; p.y += p.dy; p.dy += 0.06; p.life--; if (p.life <= 0) particles.splice(i, 1); } }
+
+            function toggleDebugMode() { /* ... no changes ... */
+                isDebugMode = !isDebugMode; console.log("Debug Mode:", isDebugMode ? "ON" : "OFF"); debugIndicator.style.display = isDebugMode ? 'block' : 'none'; }
+            function deleteRandomBrick() { /* ... no changes ... */
+                let activeBricks = [];
+                for (let c = 0; c < BRICK_COLUMN_COUNT; c++) { for (let r = 0; r < BRICK_ROW_COUNT; r++) { if (bricks[c] && bricks[c][r] && bricks[c][r].status === 1) { activeBricks.push(bricks[c][r]); } } }
+                if (activeBricks.length === 0) { return false; }
+                const randomIndex = Math.floor(Math.random() * activeBricks.length); const brickToDelete = activeBricks[randomIndex];
+                brickToDelete.status = 0; createShatterEffect(brickToDelete.x + brickToDelete.width / 2, brickToDelete.y + brickToDelete.height / 2, brickToDelete.color);
+                return true; }
+
+            function handleDebugBrickDeletion() {
+                 // Pause during row animation
+                 if (!isDebugMode || !isTKeyDown || isPaused || isGameOver || isAnimatingRows) return false;
+                 const currentTime = performance.now(); const timeHeld = currentTime - tKeyDownStartTime;
+                 if (timeHeld < DEBUG_DELETE_INITIAL_DELAY_MS) return false;
+                 const timeSinceLastDelete = currentTime - lastBrickDeleteTime;
+                 if (timeSinceLastDelete >= DEBUG_DELETE_INTERVAL_MS) {
+                    const deleted = deleteRandomBrick();
+                    if (deleted) { lastBrickDeleteTime = currentTime; return true; }
+                 } return false;
+            }
 
 			// --- Input Handlers ---
-
-			function keyDownHandler(e) {
-				// --- Spacebar Restart ---
-				if (
-					(e.code === "Space" || e.key === " ") &&
-					(isGameOver || isGameWon)
-				) {
-                    // Reset game state and restart
-                    // Stop the current animation loop before starting a new one in initGame
-                    if (animationFrameId) {
-                        cancelAnimationFrame(animationFrameId);
-                        animationFrameId = null; // Clear the ID
-                    }
-					initGame();
-					e.preventDefault(); // Prevent spacebar from scrolling page
-					return; // Stop processing other keys if restarting
+			function keyDownHandler(e) { /* ... no changes in logic, just formatting ... */
+                if (e.key === "Escape" && !isGameOver) { isPaused = !isPaused; e.preventDefault(); return; }
+                if ( (e.code === "Space" || e.key === " ") && isGameOver ) { if (animationFrameId) cancelAnimationFrame(animationFrameId); animationFrameId = null; initGame(); e.preventDefault(); return; }
+                if (e.key === 't' || e.key === 'T') { if (!isTKeyDown) { isTKeyDown = true; tKeyDownStartTime = performance.now(); lastBrickDeleteTime = tKeyDownStartTime; toggleDebugMode(); } e.preventDefault(); return; }
+				if (!isPaused && !isGameOver && !isAnimatingRows) { // Also check animation state for paddle input
+					if (e.key === "Right" || e.key === "ArrowRight" || e.key === "d" || e.key === "D") rightPressed = true;
+					else if (e.key === "Left" || e.key === "ArrowLeft" || e.key === "a" || e.key === "A") leftPressed = true;
 				}
-
-				// --- Paddle Movement (only when game is active) ---
-				if (!isGameOver && !isGameWon) {
-					if (
-						e.key === "Right" ||
-						e.key === "ArrowRight" ||
-						e.key === "d" ||
-						e.key === "D"
-					) {
-						rightPressed = true;
-					} else if (
-						e.key === "Left" ||
-						e.key === "ArrowLeft" ||
-						e.key === "a" ||
-						e.key === "A"
-					) {
-						leftPressed = true;
-					}
-				}
-
-				// Prevent default action for game control keys to avoid scrolling etc.
-				if (
-					[
-						"ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown",
-                        " ", "a", "A", "d", "D"
-					].includes(e.key)
-				) {
-					e.preventDefault();
-				}
+				if (["ArrowLeft", "ArrowRight", " ", "a", "A", "d", "D", "Escape", "t", "T"].includes(e.key)) e.preventDefault();
 			}
-
-			function keyUpHandler(e) {
-				if (
-					e.key === "Right" ||
-					e.key === "ArrowRight" ||
-					e.key === "d" ||
-					e.key === "D"
-				) {
-					rightPressed = false;
-				} else if (
-					e.key === "Left" ||
-					e.key === "ArrowLeft" ||
-					e.key === "a" ||
-					e.key === "A"
-				) {
-					leftPressed = false;
-				}
+			function keyUpHandler(e) { /* ... no changes in logic, just formatting ... */
+                if (e.key === 't' || e.key === 'T') { isTKeyDown = false; e.preventDefault(); return; }
+				if (e.key === "Right" || e.key === "ArrowRight" || e.key === "d" || e.key === "D") rightPressed = false;
+				else if (e.key === "Left" || e.key === "ArrowLeft" || e.key === "a" || e.key === "A") leftPressed = false;
+                if (["ArrowLeft", "ArrowRight", "a", "A", "d", "D", "t", "T"].includes(e.key)) e.preventDefault();
 			}
 
 			// --- Event Listeners Setup ---
 			document.addEventListener("keydown", keyDownHandler, false);
 			document.addEventListener("keyup", keyUpHandler, false);
-            // Touch controls could be added here for mobile
-
 
 			// --- Game Loop ---
 			function gameLoop() {
-				// Clear canvas
-				ctx.fillStyle = BG_COLOR;
-				ctx.fillRect(0, 0, canvas.width, canvas.height);
+				ctx.fillStyle = BG_COLOR; ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-                // Update game state first
-				updatePaddle();   // Updates paddle position based on input (if active)
-				updateBall();     // Updates ball position, handles wall/paddle/bottom (if active)
-				brickCollision(); // Checks for brick hits & win condition (if active)
-                updateParticles();// Always update particles for visual effects
+                // --- Update State ---
+                updateRowAnimation(); // Update animation progress first
+                const debugDeletedBrick = handleDebugBrickDeletion();
+                updateLaunchDelay();
+				updatePaddle();
+				updateBall();
+				const ballCollisionHappened = brickCollision();
+                updateParticles();
 
-				// Draw elements (Order matters for layering)
-				drawBricks();
+                // --- Check Row Shift Trigger ---
+                // Pass result of debug deletion to checkAndShiftRows if needed
+                if ((ballCollisionHappened || debugDeletedBrick) && !isPaused && !isGameOver && !isAnimatingRows) {
+                    checkAndShiftRows(); // This might start the animation
+                }
+
+				// --- Draw Elements ---
+				drawBricks(); // Drawing now handles animation offset
 				drawPaddle();
 				drawBall();
-				drawParticles(); // Draw particles after main game elements but before UI text
+				drawParticles();
 				drawScore();
 				drawLives();
 
-                // Draw Game Over / Win Messages last, on top of everything
-				if (isGameOver) {
-					drawMessage("GAME OVER", GAMEOVER_COLOR);
-                    // Stop the loop if game is over
-					// animationFrameId = null; // Option 1: Stop loop here
-                    // return;
-				} else if (isGameWon) {
-					drawMessage("YOU WIN!", GAMEWON_COLOR);
-                     // Stop the loop if game is won
-					// animationFrameId = null; // Option 1: Stop loop here
-                    // return;
-				}
+                // --- Draw Overlay Messages ---
+				if (isGameOver) drawMessage("GAME OVER", GAMEOVER_COLOR);
+				else if (isPaused) drawPauseMessage();
 
-                // Request next frame (only if game is not definitively stopped)
-                // If you uncomment the returns above, this line won't be reached on game over/win
 				animationFrameId = requestAnimationFrame(gameLoop);
-                // Option 2: Always request frame, rely on checks within update functions
-                // This allows particles to keep animating on end screens.
 			}
 
 			// --- Start Game ---
-			initGame(); // Set up initial state
-			// gameLoop() is called by initGame the first time and on restarts
+			initGame();
 		</script>
 	</body>
 </html>
