@@ -1,0 +1,41 @@
+/* Basic body styling for centering and background */
+body {
+	margin: 0;
+	padding: 0;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	height: 100vh; /* Full viewport height */
+	background-color: #121212; /* Dark background */
+	font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+	color: #e0e0e0; /* Light text color */
+	overflow: hidden; /* Prevent scrollbars */
+}
+
+/* Canvas styling */
+canvas {
+	border: 1px solid #444; /* Subtle border */
+	background-color: #1e1e1e; /* Slightly lighter dark background for canvas */
+	display: block;
+	max-width: 100%; /* Ensure canvas fits within screen width */
+	max-height: 100vh; /* Ensure canvas fits within screen height */
+	/* Disable pinch-zoom and panning on the canvas itself on touch devices */
+	touch-action: none;
+	cursor: pointer; /* Indicate canvas is interactive */
+}
+
+/* Debug mode indicator styling */
+.debug-text {
+	position: absolute;
+	top: 10px;
+	left: 50%;
+	transform: translateX(-50%);
+	color: yellow;
+	font-size: 14px;
+	background-color: rgba(0, 0, 0, 0.5); /* Semi-transparent black background */
+	padding: 2px 5px;
+	border-radius: 3px;
+	z-index: 10; /* Ensure it's above the canvas */
+	text-align: center;
+	pointer-events: none; /* Allow clicks/touches to pass through */
+}
