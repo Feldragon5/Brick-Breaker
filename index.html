@@ -9,28 +9,47 @@
 		<title>Infinite Vertical Brick Slayer</title>
 		<style>
 			body {
-				margin: 0; padding: 0; display: flex; justify-content: center; align-items: center;
-				height: 100vh; background-color: #121212; font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-				color: #e0e0e0; overflow: hidden;
+				margin: 0;
+				padding: 0;
+				display: flex;
+				justify-content: center;
+				align-items: center;
+				height: 100vh;
+				background-color: #121212;
+				font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+				color: #e0e0e0;
+				overflow: hidden;
 			}
 			canvas {
-				border: 1px solid #444; background-color: #1e1e1e; display: block;
-				max-width: 100%; max-height: 100vh;
-                /* Ensure touches on the canvas are handled by our script */
-                touch-action: none;
-                cursor: pointer; /* Indicate canvas is interactive */
+				border: 1px solid #444;
+				background-color: #1e1e1e;
+				display: block;
+				max-width: 100%;
+				max-height: 100vh;
+				/* Ensure touches on the canvas are handled by our script */
+				touch-action: none;
+				cursor: pointer; /* Indicate canvas is interactive */
 			}
 			.debug-text {
-				position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
-				color: yellow; font-size: 14px; background-color: rgba(0, 0, 0, 0.5);
-				padding: 2px 5px; border-radius: 3px; z-index: 10; text-align: center;
+				position: absolute;
+				top: 10px;
+				left: 50%;
+				transform: translateX(-50%);
+				color: yellow;
+				font-size: 14px;
+				background-color: rgba(0, 0, 0, 0.5);
+				padding: 2px 5px;
+				border-radius: 3px;
+				z-index: 10;
+				text-align: center;
 			}
 		</style>
 	</head>
 	<body>
-		<div id="debugIndicator" class="debug-text" style="display: none;">
-            DEBUG MODE ACTIVE<br>(5x Speed / Bottom Bounce)<br>Press T to toggle
-        </div>
+		<div id="debugIndicator" class="debug-text" style="display: none">
+			DEBUG MODE ACTIVE<br />(5x Speed / Bottom Bounce)<br />Press T to
+			toggle
+		</div>
 		<canvas id="gameCanvas" width="400" height="700"></canvas>
 
 		<script>
@@ -41,94 +60,135 @@
 			// --- Game Constants ---
 			const PADDLE_HEIGHT = 12;
 			const PADDLE_WIDTH = 90;
-			const BALL_RADIUS = 7;
-			const BRICK_ROW_COUNT = 15;
+			const BALL_RADIUS = 8;
+			const BRICK_ROW_COUNT = 18;
 			const BRICK_COLUMN_COUNT = 7;
 			const BRICK_WIDTH = 45;
 			const BRICK_HEIGHT = 20;
-			const BRICK_PADDING = 4;
-			const BRICK_OFFSET_TOP = 50;
-			const BRICK_OFFSET_LEFT = (canvas.width - (BRICK_COLUMN_COUNT * (BRICK_WIDTH + BRICK_PADDING) - BRICK_PADDING)) / 2;
+			const BRICK_PADDING = 8;
+			const BRICK_OFFSET_TOP = 60; // Increased slightly to make space for top UI
+			const BRICK_OFFSET_LEFT =
+				(canvas.width -
+					(BRICK_COLUMN_COUNT * (BRICK_WIDTH + BRICK_PADDING) -
+						BRICK_PADDING)) /
+				2;
 			const ROW_HEIGHT = BRICK_HEIGHT + BRICK_PADDING;
 
-			const PADDLE_SPEED = 7; // Adjusted speed slightly for smoother mobile control feel
+			const PADDLE_SPEED = 7;
 			const INITIAL_BALL_SPEED_X = 4;
-			const INITIAL_BALL_SPEED_Y = -5; // Base speed
+			const INITIAL_BALL_SPEED_Y = -5;
 
-            // --- UI Constants ---
-            const PAUSE_BUTTON_SIZE = 30;
-            const PAUSE_BUTTON_PADDING = 15;
-            const PAUSE_BUTTON_X = canvas.width - PAUSE_BUTTON_SIZE - PAUSE_BUTTON_PADDING;
-            const PAUSE_BUTTON_Y = PAUSE_BUTTON_PADDING;
-            const PAUSE_ICON_COLOR = "#e0e0e0";
-            const PAUSE_BUTTON_BG = "rgba(255, 255, 255, 0.1)"; // Subtle background
+			// --- UI Constants ---
+			const UI_TOP_PADDING = 15;
+			const PAUSE_BUTTON_SIZE = 30;
+			const PAUSE_BUTTON_X = (canvas.width - PAUSE_BUTTON_SIZE) / 2; // <-- Horizontally Centered
+			const PAUSE_BUTTON_Y = UI_TOP_PADDING; // <-- Positioned near the top
+			const PAUSE_ICON_COLOR = "#e0e0e0";
+			const PAUSE_BUTTON_BG = "rgba(255, 255, 255, 0.1)";
+			const MESSAGE_BG_COLOR = "rgba(30, 30, 30, 0.85)";
+			const MESSAGE_STRIPE_HEIGHT = 100;
 
-            // --- Particle Constants ---
+			// --- Particle Constants ---
 			const PARTICLE_COUNT = 10;
 			const PARTICLE_LIFE = 30;
 			const PARTICLE_SPEED_FACTOR = 2.0;
 			const PARTICLE_SIZE = 2.0;
 
-            // --- Brick Shatter Constants ---
-            const NUM_SHATTER_PIECES = 5;
-            const SHATTER_GRAVITY = 0.20; // Faster fall
-            const SHATTER_INITIAL_DX_RANGE = 2.0;
-            const SHATTER_INITIAL_DY_RANGE = 2.5;
-            const SHATTER_ROTATION_SPEED_RANGE = 0.15;
-            const SHARD_SIZE_FACTOR = 0.75;
-            const SHARD_ALPHA = 0.75; // Shard transparency
-            const SHARD_DARKEN_FACTOR = 0.75; // Shard darkness
+			// --- Brick Shatter Constants ---
+			const NUM_SHATTER_PIECES = 5;
+			const SHATTER_GRAVITY = 0.2;
+			const SHATTER_INITIAL_DX_RANGE = 2.0;
+			const SHATTER_INITIAL_DY_RANGE = 2.5;
+			const SHATTER_ROTATION_SPEED_RANGE = 0.15;
+			const SHARD_SIZE_FACTOR = 0.75;
+			const SHARD_ALPHA = 0.75;
+			const SHARD_DARKEN_FACTOR = 0.75;
 
 			const LAUNCH_DELAY_FRAMES = 50;
 
-            // --- Gameplay Constants ---
-            const ROW_ANIMATION_SPEED = 8;
-            const SCORE_FOR_EXTRA_LIFE = 50;
+			// --- Gameplay Constants ---
+			const ROW_ANIMATION_SPEED = 8;
+			const SCORE_FOR_EXTRA_LIFE = 50;
 
 			// --- Dark Theme Colors ---
-			const BG_COLOR = "#1e1e1e"; const PADDLE_COLOR = "#bdc3c7"; const BALL_COLOR = "#ffffff";
-			const TEXT_COLOR = "#e0e0e0"; const INFO_TEXT_COLOR = "#888888"; const GAMEOVER_COLOR = "#e74c3c";
-            const PAUSE_COLOR = "#3498db";
-			const availableColors = [ "#e74c3c", "#3498db", "#2ecc71", "#f1c40f", "#9b59b6", "#1abc9c", "#e67e22", "#34ace0", "#ff7f50", "#ff6b81"];
+			const BG_COLOR = "#1e1e1e";
+			const PADDLE_COLOR = "#bdc3c7";
+			const BALL_COLOR = "#ffffff";
+			const TEXT_COLOR = "#e0e0e0";
+			const INFO_TEXT_COLOR = "#888888"; // Kept for potential future use, not used in messages now
+			const GAMEOVER_COLOR = "#e74c3c";
+			const PAUSE_COLOR = "#3498db";
+			const availableColors = [
+				"#e74c3c",
+				"#3498db",
+				"#2ecc71",
+				"#f1c40f",
+				"#9b59b6",
+				"#1abc9c",
+				"#e67e22",
+				"#34ace0",
+				"#ff7f50",
+				"#ff6b81",
+			];
 
 			// --- Game State Variables ---
-			let ball = {}; let paddle = {}; let bricks = []; let particles = [];
-            let shatterPieces = [];
-			let score = 0; let lives = 3; let isGameOver = false;
-			let animationFrameId; let rightPressed = false; let leftPressed = false;
+			let ball = {};
+			let paddle = {};
+			let bricks = [];
+			let particles = [];
+			let shatterPieces = [];
+			let score = 0;
+			let lives = 3;
+			let isGameOver = false;
+			let animationFrameId;
+			let rightPressed = false;
+			let leftPressed = false;
 			let rowsAdvanced = 0;
+			let isPaused = false;
+			let waitingToLaunch = true;
+			let launchDelayTimer = 0;
 
-            let isPaused = false; let waitingToLaunch = true; let launchDelayTimer = 0;
+			// --- Touch State Variables ---
+			let isTouchActive = false;
+			let touchTargetX = null;
 
-            // --- Touch State Variables ---
-            let isTouchActive = false;  // Is a touch currently controlling the paddle?
-            let touchTargetX = null;    // Target X coordinate for the paddle center from touch input
+			// --- Debug State ---
+			let isDebugMode = false;
+			let debugSpeedMultiplier = 1;
 
-            // --- Debug State ---
-            let isDebugMode = false; let debugSpeedMultiplier = 1;
-
-            // --- Animation State ---
-            let isAnimatingRows = false; let animationTargetY = 0;
-            let animationCurrentY = 0; let rowsToShiftAmount = 0;
-
+			// --- Animation State ---
+			let isAnimatingRows = false;
+			let animationTargetY = 0;
+			let animationCurrentY = 0;
+			let rowsToShiftAmount = 0;
 
 			// --- Initialization ---
 			function initGame() {
-				score = 0; rowsAdvanced = 0; lives = 3; isGameOver = false; isPaused = false;
-                debugSpeedMultiplier = isDebugMode ? 5 : 1;
+				score = 0;
+				rowsAdvanced = 0;
+				lives = 3;
+				isGameOver = false;
+				isPaused = false;
+				debugSpeedMultiplier = isDebugMode ? 5 : 1;
 				particles = [];
-                shatterPieces = [];
-                rightPressed = false; leftPressed = false;
-                // Reset touch state
-                isTouchActive = false;
-                touchTargetX = null;
-                isAnimatingRows = false; animationTargetY = 0; animationCurrentY = 0; rowsToShiftAmount = 0;
+				shatterPieces = [];
+				rightPressed = false;
+				leftPressed = false;
+				isTouchActive = false;
+				touchTargetX = null;
+				isAnimatingRows = false;
+				animationTargetY = 0;
+				animationCurrentY = 0;
+				rowsToShiftAmount = 0;
 
-                resetBallForLaunch();
+				resetBallForLaunch();
 
-				if (paddle.x === undefined) paddle.x = (canvas.width - PADDLE_WIDTH) / 2;
+				if (paddle.x === undefined)
+					paddle.x = (canvas.width - PADDLE_WIDTH) / 2;
 				paddle.y = canvas.height - PADDLE_HEIGHT - 20;
-				paddle.width = PADDLE_WIDTH; paddle.height = PADDLE_HEIGHT; paddle.color = PADDLE_COLOR;
+				paddle.width = PADDLE_WIDTH;
+				paddle.height = PADDLE_HEIGHT;
+				paddle.color = PADDLE_COLOR;
 
 				bricks = [];
 				for (let c = 0; c < BRICK_COLUMN_COUNT; c++) {
@@ -139,491 +199,846 @@
 				}
 
 				if (!animationFrameId || isGameOver) {
-					if (animationFrameId) cancelAnimationFrame(animationFrameId);
-                    animationFrameId = null;
+					if (animationFrameId)
+						cancelAnimationFrame(animationFrameId);
+					animationFrameId = null;
 					gameLoop();
 				}
-                debugIndicator.style.display = isDebugMode ? 'block' : 'none';
+				debugIndicator.style.display = isDebugMode ? "block" : "none";
 			}
 
-            function resetBallForLaunch(keepCurrentPos = false) {
-                 if (!keepCurrentPos) { ball.x = canvas.width / 2; ball.y = canvas.height - 80; }
-                 ball.dx = 0;
-                 ball.dy = 0;
-                 ball.radius = BALL_RADIUS; ball.color = BALL_COLOR;
-                 waitingToLaunch = true; launchDelayTimer = LAUNCH_DELAY_FRAMES;
-            }
+			function resetBallForLaunch(keepCurrentPos = false) {
+				if (!keepCurrentPos) {
+					ball.x = canvas.width / 2;
+					ball.y = canvas.height - 80;
+				}
+				ball.dx = 0;
+				ball.dy = 0;
+				ball.radius = BALL_RADIUS;
+				ball.color = BALL_COLOR;
+				waitingToLaunch = true;
+				launchDelayTimer = LAUNCH_DELAY_FRAMES;
+			}
 
-            function createBrick(c, r) {
-                const brickX = c * (BRICK_WIDTH + BRICK_PADDING) + BRICK_OFFSET_LEFT;
-                const brickY = r * ROW_HEIGHT + BRICK_OFFSET_TOP;
-                const colorIndex = Math.floor(Math.random() * availableColors.length);
-                return { x: brickX, y: brickY, width: BRICK_WIDTH, height: BRICK_HEIGHT, color: availableColors[colorIndex] };
-            }
+			function createBrick(c, r) {
+				const brickX =
+					c * (BRICK_WIDTH + BRICK_PADDING) + BRICK_OFFSET_LEFT;
+				const brickY = r * ROW_HEIGHT + BRICK_OFFSET_TOP;
+				const colorIndex = Math.floor(
+					Math.random() * availableColors.length
+				);
+				return {
+					x: brickX,
+					y: brickY,
+					width: BRICK_WIDTH,
+					height: BRICK_HEIGHT,
+					color: availableColors[colorIndex],
+				};
+			}
 
-            // --- Helper Function: Convert Hex to RGBA and Darken ---
-            function hexToRgba(hex, alpha = 1, darkenFactor = 1) {
-                let r = 0, g = 0, b = 0;
-                if (hex.length == 4) { // #RGB
-                    r = parseInt(hex[1] + hex[1], 16); g = parseInt(hex[2] + hex[2], 16); b = parseInt(hex[3] + hex[3], 16);
-                } else if (hex.length == 7) { // #RRGGBB
-                    r = parseInt(hex[1] + hex[2], 16); g = parseInt(hex[3] + hex[4], 16); b = parseInt(hex[5] + hex[6], 16);
-                }
-                r = Math.max(0, Math.floor(r * darkenFactor)); g = Math.max(0, Math.floor(g * darkenFactor)); b = Math.max(0, Math.floor(b * darkenFactor));
-                return `rgba(${r},${g},${b},${alpha})`;
-            }
-
+			// --- Helper Function: Convert Hex to RGBA and Darken ---
+			function hexToRgba(hex, alpha = 1, darkenFactor = 1) {
+				let r = 0,
+					g = 0,
+					b = 0;
+				if (hex.length == 4) {
+					r = parseInt(hex[1] + hex[1], 16);
+					g = parseInt(hex[2] + hex[2], 16);
+					b = parseInt(hex[3] + hex[3], 16);
+				} else if (hex.length == 7) {
+					r = parseInt(hex[1] + hex[2], 16);
+					g = parseInt(hex[3] + hex[4], 16);
+					b = parseInt(hex[5] + hex[6], 16);
+				}
+				r = Math.max(0, Math.floor(r * darkenFactor));
+				g = Math.max(0, Math.floor(g * darkenFactor));
+				b = Math.max(0, Math.floor(b * darkenFactor));
+				return `rgba(${r},${g},${b},${alpha})`;
+			}
 
 			// --- Drawing Functions ---
 			function drawBall() {
-				ctx.beginPath(); ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2); ctx.fillStyle = ball.color; ctx.fill(); ctx.closePath(); }
+				ctx.beginPath();
+				ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+				ctx.fillStyle = ball.color;
+				ctx.fill();
+				ctx.closePath();
+			}
 
 			function drawPaddle() {
 				if (paddle.x === undefined) return;
-				ctx.beginPath(); ctx.lineCap = "round"; ctx.lineWidth = paddle.height;
-				ctx.moveTo(paddle.x + paddle.height / 2, paddle.y + paddle.height / 2);
-				ctx.lineTo(paddle.x + paddle.width - paddle.height / 2, paddle.y + paddle.height / 2);
-				ctx.strokeStyle = paddle.color; ctx.stroke(); ctx.closePath(); }
+				ctx.beginPath();
+				ctx.lineCap = "round";
+				ctx.lineWidth = paddle.height;
+				ctx.moveTo(
+					paddle.x + paddle.height / 2,
+					paddle.y + paddle.height / 2
+				);
+				ctx.lineTo(
+					paddle.x + paddle.width - paddle.height / 2,
+					paddle.y + paddle.height / 2
+				);
+				ctx.strokeStyle = paddle.color;
+				ctx.stroke();
+				ctx.closePath();
+			}
 
 			function drawBricks() {
-                const yOffset = isAnimatingRows ? animationCurrentY : 0;
+				const yOffset = isAnimatingRows ? animationCurrentY : 0;
 				for (let c = 0; c < BRICK_COLUMN_COUNT; c++) {
 					for (let r = 0; r < BRICK_ROW_COUNT; r++) {
 						if (bricks[c] && bricks[c][r]) {
 							const brick = bricks[c][r];
 							ctx.beginPath();
-							ctx.rect( brick.x, brick.y + yOffset, brick.width, brick.height );
-							ctx.fillStyle = brick.color; ctx.fill(); ctx.closePath();
-							ctx.strokeStyle = "rgba(0, 0, 0, 0.2)"; ctx.lineWidth = 1;
-							ctx.strokeRect(brick.x, brick.y + yOffset, brick.width, brick.height);
+							ctx.rect(
+								brick.x,
+								brick.y + yOffset,
+								brick.width,
+								brick.height
+							);
+							ctx.fillStyle = brick.color;
+							ctx.fill();
+							ctx.closePath();
+							ctx.strokeStyle = "rgba(0, 0, 0, 0.2)";
+							ctx.lineWidth = 1;
+							ctx.strokeRect(
+								brick.x,
+								brick.y + yOffset,
+								brick.width,
+								brick.height
+							);
 						}
 					}
 				}
 			}
 
+			// --- Swapped Score and Lives ---
 			function drawScore() {
-				ctx.font = '18px "Segoe UI", sans-serif'; ctx.fillStyle = TEXT_COLOR; ctx.fillText("Score: " + score, 15, 30); }
+				// <-- Now draws top left
+				ctx.font = '18px "Segoe UI", sans-serif';
+				ctx.fillStyle = TEXT_COLOR;
+				ctx.textAlign = "left"; // Align text to the left
+				ctx.fillText(
+					"Score: " + score,
+					UI_TOP_PADDING,
+					UI_TOP_PADDING + 18
+				); // Position top left (adjust Y for font size)
+				// Reset alignment not strictly needed here as the next draw call sets its own
+			}
 
 			function drawLives() {
-				ctx.font = '18px "Segoe UI", sans-serif'; ctx.fillStyle = TEXT_COLOR; ctx.fillText("Lives: " + lives, canvas.width - 100, 30); } // Adjusted X for pause button
+				// <-- Now draws top right
+				ctx.font = '18px "Segoe UI", sans-serif';
+				ctx.fillStyle = TEXT_COLOR;
+				ctx.textAlign = "right"; // Align text to the right
+				ctx.fillText(
+					"Lives: " + lives,
+					canvas.width - UI_TOP_PADDING,
+					UI_TOP_PADDING + 18
+				); // Position top right (adjust Y for font size)
+				ctx.textAlign = "left"; // Reset alignment for subsequent draws
+			}
+			// --- End Swapped Score and Lives ---
 
-			function drawParticles() { // Particle burst effect
+			function drawParticles() {
 				particles.forEach((p) => {
-					ctx.beginPath(); ctx.rect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
-					ctx.fillStyle = p.color; ctx.globalAlpha = Math.max(0, p.life / PARTICLE_LIFE);
-					ctx.fill(); ctx.closePath();
+					ctx.beginPath();
+					ctx.rect(
+						p.x - p.size / 2,
+						p.y - p.size / 2,
+						p.size,
+						p.size
+					);
+					ctx.fillStyle = p.color;
+					ctx.globalAlpha = Math.max(0, p.life / PARTICLE_LIFE);
+					ctx.fill();
+					ctx.closePath();
 				});
-				ctx.globalAlpha = 1.0; }
+				ctx.globalAlpha = 1.0;
+			}
 
-            function drawShatterPieces() { // Falling shards
-                shatterPieces.forEach((p) => {
-                    ctx.save();
-                    ctx.translate(p.x, p.y); ctx.rotate(p.angle);
-                    ctx.fillStyle = hexToRgba(p.color, SHARD_ALPHA, SHARD_DARKEN_FACTOR);
-                    ctx.beginPath();
-                    ctx.moveTo(p.vertices[0].x, p.vertices[0].y);
-                    ctx.lineTo(p.vertices[1].x, p.vertices[1].y);
-                    ctx.lineTo(p.vertices[2].x, p.vertices[2].y);
-                    ctx.closePath(); ctx.fill();
-                    ctx.restore();
-                });
-            }
+			function drawShatterPieces() {
+				shatterPieces.forEach((p) => {
+					ctx.save();
+					ctx.translate(p.x, p.y);
+					ctx.rotate(p.angle);
+					ctx.fillStyle = hexToRgba(
+						p.color,
+						SHARD_ALPHA,
+						SHARD_DARKEN_FACTOR
+					);
+					ctx.beginPath();
+					ctx.moveTo(p.vertices[0].x, p.vertices[0].y);
+					ctx.lineTo(p.vertices[1].x, p.vertices[1].y);
+					ctx.lineTo(p.vertices[2].x, p.vertices[2].y);
+					ctx.closePath();
+					ctx.fill();
+					ctx.restore();
+				});
+			}
 
-            function drawPauseButton() {
-                // Draw subtle background
-                ctx.fillStyle = PAUSE_BUTTON_BG;
-                ctx.fillRect(PAUSE_BUTTON_X, PAUSE_BUTTON_Y, PAUSE_BUTTON_SIZE, PAUSE_BUTTON_SIZE);
+			function drawPauseButton() {
+				// Uses updated X and Y constants
+				ctx.fillStyle = PAUSE_BUTTON_BG;
+				ctx.fillRect(
+					PAUSE_BUTTON_X,
+					PAUSE_BUTTON_Y,
+					PAUSE_BUTTON_SIZE,
+					PAUSE_BUTTON_SIZE
+				);
+				ctx.fillStyle = PAUSE_ICON_COLOR;
+				const iconSize = PAUSE_BUTTON_SIZE * 0.4;
+				const iconPosX =
+					PAUSE_BUTTON_X + (PAUSE_BUTTON_SIZE - iconSize) / 2;
+				const iconPosY =
+					PAUSE_BUTTON_Y + (PAUSE_BUTTON_SIZE - iconSize) / 2;
+				if (isPaused) {
+					// Draw Resume icon (>)
+					ctx.beginPath();
+					ctx.moveTo(iconPosX, iconPosY);
+					ctx.lineTo(iconPosX + iconSize, iconPosY + iconSize / 2);
+					ctx.lineTo(iconPosX, iconPosY + iconSize);
+					ctx.closePath();
+					ctx.fill();
+				} else {
+					// Draw Pause icon (||)
+					const barWidth = iconSize / 4;
+					ctx.fillRect(iconPosX, iconPosY, barWidth, iconSize);
+					ctx.fillRect(
+						iconPosX + iconSize - barWidth,
+						iconPosY,
+						barWidth,
+						iconSize
+					);
+				}
+			}
 
-                // Draw Pause (||) or Resume (>) icon
-                ctx.fillStyle = PAUSE_ICON_COLOR;
-                const iconSize = PAUSE_BUTTON_SIZE * 0.4; // Size of inner icon
-                const iconPosX = PAUSE_BUTTON_X + (PAUSE_BUTTON_SIZE - iconSize) / 2;
-                const iconPosY = PAUSE_BUTTON_Y + (PAUSE_BUTTON_SIZE - iconSize) / 2;
+			function drawMessageBackground() {
+				ctx.fillStyle = MESSAGE_BG_COLOR;
+				const stripeY = canvas.height / 2 - MESSAGE_STRIPE_HEIGHT / 2;
+				ctx.fillRect(0, stripeY, canvas.width, MESSAGE_STRIPE_HEIGHT);
+			}
 
-                if (isPaused) { // Draw Resume icon (>)
-                    ctx.beginPath();
-                    ctx.moveTo(iconPosX, iconPosY);
-                    ctx.lineTo(iconPosX + iconSize, iconPosY + iconSize / 2);
-                    ctx.lineTo(iconPosX, iconPosY + iconSize);
-                    ctx.closePath();
-                    ctx.fill();
-                } else { // Draw Pause icon (||)
-                    const barWidth = iconSize / 4;
-                    ctx.fillRect(iconPosX, iconPosY, barWidth, iconSize);
-                    ctx.fillRect(iconPosX + iconSize - barWidth, iconPosY, barWidth, iconSize);
-                }
-            }
-
+			// --- Modified drawMessage: Removed extra text ---
 			function drawMessage(message, color) {
-				ctx.font = 'bold 32px "Segoe UI", sans-serif'; ctx.fillStyle = color; ctx.textAlign = "center";
-				ctx.fillText(message, canvas.width / 2, canvas.height / 2 - 40);
-				ctx.font = '18px "Segoe UI", sans-serif'; ctx.fillStyle = INFO_TEXT_COLOR;
-				ctx.fillText("Press SPACE or Tap Screen to Restart", canvas.width / 2, canvas.height / 2);
-				ctx.textAlign = "left"; }
+				drawMessageBackground();
+				ctx.font = 'bold 36px "Segoe UI", sans-serif';
+				ctx.fillStyle = color;
+				ctx.textAlign = "center";
+				ctx.textBaseline = "middle"; // Center text vertically
+				ctx.fillText(message, canvas.width / 2, canvas.height / 2);
+				// Removed secondary text line
+				ctx.textAlign = "left"; // Reset alignment
+				ctx.textBaseline = "alphabetic"; // Reset baseline
+			}
 
-            function drawPauseMessage() {
-                ctx.font = 'bold 36px "Segoe UI", sans-serif'; ctx.fillStyle = PAUSE_COLOR; ctx.textAlign = "center";
-				ctx.fillText("PAUSED", canvas.width / 2, canvas.height / 2 - 40);
-				ctx.font = '20px "Segoe UI", sans-serif'; ctx.fillStyle = INFO_TEXT_COLOR;
-                // Added note about button click
-				ctx.fillText("Press ESC or Click Pause Button to Resume", canvas.width / 2, canvas.height / 2);
-				ctx.textAlign = "left"; }
+			// --- Modified drawPauseMessage: Removed extra text ---
+			function drawPauseMessage() {
+				drawMessageBackground();
+				ctx.font = 'bold 36px "Segoe UI", sans-serif';
+				ctx.fillStyle = PAUSE_COLOR;
+				ctx.textAlign = "center";
+				ctx.textBaseline = "middle"; // Center text vertically
+				ctx.fillText("PAUSED", canvas.width / 2, canvas.height / 2);
+				// Removed secondary text line
+				ctx.textAlign = "left"; // Reset alignment
+				ctx.textBaseline = "alphabetic"; // Reset baseline
+			}
 
 			// --- Update & Collision Logic ---
+			function updatePaddle() {
+				if (isPaused || isGameOver || isAnimatingRows) return;
+				let move = 0;
+				if (isTouchActive && touchTargetX !== null) {
+					const paddleCenter = paddle.x + paddle.width / 2;
+					const difference = touchTargetX - paddleCenter;
+					const threshold = PADDLE_SPEED / 1.5;
+					if (Math.abs(difference) > threshold) {
+						move = difference > 0 ? 1 : -1;
+					}
+				} else {
+					if (leftPressed) move = -1;
+					else if (rightPressed) move = 1;
+				}
+				paddle.x += move * PADDLE_SPEED;
+				paddle.x = Math.max(
+					0,
+					Math.min(paddle.x, canvas.width - paddle.width)
+				);
+			}
 
-            function updatePaddle() {
-                // Paddle does not move if paused, game over, or animating rows
-                if (isPaused || isGameOver || isAnimatingRows) return;
+			function updateLaunchDelay() {
+				if (
+					waitingToLaunch &&
+					!isPaused &&
+					!isGameOver &&
+					!isAnimatingRows
+				) {
+					launchDelayTimer--;
+					if (launchDelayTimer <= 0) {
+						waitingToLaunch = false;
+						ball.dx =
+							INITIAL_BALL_SPEED_X *
+							(Math.random() < 0.5 ? 1 : -1);
+						ball.dy = INITIAL_BALL_SPEED_Y;
+					}
+				}
+			}
 
-                let move = 0; // -1 for left, 1 for right, 0 for no move
+			function updateBall() {
+				if (
+					isPaused ||
+					isGameOver ||
+					waitingToLaunch ||
+					isAnimatingRows
+				)
+					return;
+				let nextX = ball.x + ball.dx * debugSpeedMultiplier;
+				let nextY = ball.y + ball.dy * debugSpeedMultiplier;
+				if (nextX > canvas.width - ball.radius || nextX < ball.radius) {
+					ball.dx = -ball.dx;
+					if (nextX > canvas.width - ball.radius)
+						ball.x = canvas.width - ball.radius;
+					if (nextX < ball.radius) ball.x = ball.radius;
+					nextX = ball.x + ball.dx * debugSpeedMultiplier;
+				}
+				if (nextY < ball.radius) {
+					ball.dy = -ball.dy;
+					if (nextY < ball.radius) ball.y = ball.radius;
+					nextY = ball.y + ball.dy * debugSpeedMultiplier;
+				} else if (
+					ball.dy > 0 &&
+					nextY + ball.radius > paddle.y &&
+					ball.y + ball.radius <= paddle.y &&
+					nextX + ball.radius > paddle.x &&
+					nextX - ball.radius < paddle.x + paddle.width
+				) {
+					paddleCollision();
+					nextY = ball.y + ball.dy * debugSpeedMultiplier;
+				} else if (nextY > canvas.height - ball.radius) {
+					if (isDebugMode) {
+						ball.dy = -ball.dy;
+						ball.y = canvas.height - ball.radius;
+					} else {
+						lives--;
+						if (lives <= 0) {
+							isGameOver = true;
+							ball.dx = 0;
+							ball.dy = 0;
+							ball.x = canvas.width / 2;
+							ball.y = canvas.height / 2 + 50;
+							return;
+						} else {
+							resetBallForLaunch();
+							return;
+						}
+					}
+				}
+				ball.x += ball.dx * debugSpeedMultiplier;
+				ball.y += ball.dy * debugSpeedMultiplier;
+			}
 
-                if (isTouchActive && touchTargetX !== null) {
-                    // --- Touch Control ---
-                    const paddleCenter = paddle.x + paddle.width / 2;
-                    const difference = touchTargetX - paddleCenter;
-                    const threshold = PADDLE_SPEED / 2; // Stop if close enough
+			function paddleCollision() {
+				if (ball.dy <= 0) return;
+				ball.dy = -ball.dy;
+				let collidePoint = ball.x - (paddle.x + paddle.width / 2);
+				ball.dx = collidePoint * 0.15;
+				const maxPaddleBounceDx = Math.abs(INITIAL_BALL_SPEED_X) * 2.2;
+				ball.dx = Math.max(
+					-maxPaddleBounceDx,
+					Math.min(maxPaddleBounceDx, ball.dx)
+				);
+				ball.y = paddle.y - ball.radius - 0.1;
+			}
 
-                    if (Math.abs(difference) > threshold) {
-                        move = difference > 0 ? 1 : -1; // Move towards the touch target
-                    }
-                } else {
-                    // --- Keyboard Control ---
-                    if (leftPressed) move = -1;
-                    else if (rightPressed) move = 1;
-                }
-
-                // Apply movement
-                paddle.x += move * PADDLE_SPEED;
-
-                // Clamp paddle position to canvas bounds
-                paddle.x = Math.max(0, Math.min(paddle.x, canvas.width - paddle.width));
-            }
-
-            function updateLaunchDelay() {
-                if (waitingToLaunch && !isPaused && !isGameOver && !isAnimatingRows) {
-                    launchDelayTimer--;
-                    if (launchDelayTimer <= 0) {
-                        waitingToLaunch = false;
-                        ball.dx = INITIAL_BALL_SPEED_X * (Math.random() < 0.5 ? 1 : -1);
-                        ball.dy = INITIAL_BALL_SPEED_Y;
-                    }
-                }
-            }
-
-            function updateBall() {
-                if (isPaused || isGameOver || waitingToLaunch || isAnimatingRows) return;
-
-                let nextX = ball.x + ball.dx * debugSpeedMultiplier;
-                let nextY = ball.y + ball.dy * debugSpeedMultiplier;
-
-                // Wall collisions
-                if (nextX > canvas.width - ball.radius || nextX < ball.radius) {
-                    ball.dx = -ball.dx;
-                    if (nextX > canvas.width - ball.radius) ball.x = canvas.width - ball.radius;
-                    if (nextX < ball.radius) ball.x = ball.radius;
-                    nextX = ball.x + ball.dx * debugSpeedMultiplier;
-                }
-                // Top wall collision
-                if (nextY < ball.radius) {
-                    ball.dy = -ball.dy;
-                    if (nextY < ball.radius) ball.y = ball.radius;
-                    nextY = ball.y + ball.dy * debugSpeedMultiplier;
-                }
-                // Paddle Collision
-                else if (ball.dy > 0 && nextY + ball.radius > paddle.y && ball.y + ball.radius <= paddle.y && nextX + ball.radius > paddle.x && nextX - ball.radius < paddle.x + paddle.width) {
-                    paddleCollision();
-                    nextY = ball.y + ball.dy * debugSpeedMultiplier;
-                }
-                // Bottom Edge / Life Loss / Debug Bounce
-                else if (nextY > canvas.height - ball.radius) {
-                    if (isDebugMode) {
-                        ball.dy = -ball.dy; ball.y = canvas.height - ball.radius;
-                    } else {
-                        lives--;
-                        if (lives <= 0) {
-                            isGameOver = true; ball.dx = 0; ball.dy = 0; ball.x = canvas.width / 2; ball.y = canvas.height / 2 + 50; return;
-                        } else {
-                            resetBallForLaunch(); return;
-                        }
-                    }
-                }
-                // Update position
-                ball.x += ball.dx * debugSpeedMultiplier;
-                ball.y += ball.dy * debugSpeedMultiplier;
-            }
-
-            function paddleCollision() {
-                if (ball.dy <= 0) return;
-                ball.dy = -ball.dy;
-                let collidePoint = ball.x - (paddle.x + paddle.width / 2);
-                ball.dx = collidePoint * 0.15;
-                const maxPaddleBounceDx = Math.abs(INITIAL_BALL_SPEED_X) * 2.2;
-                ball.dx = Math.max(-maxPaddleBounceDx, Math.min(maxPaddleBounceDx, ball.dx));
-                ball.y = paddle.y - ball.radius - 0.1;
-             }
-
+			// --- Brick Collision Logic (No change needed, ball already passes through) ---
 			function brickCollision() {
-                 if (isPaused || isGameOver || waitingToLaunch || isAnimatingRows) return false;
-                 let collisionOccurred = false;
-                 const yOffset = isAnimatingRows ? animationCurrentY : 0;
-
-				 for (let c = 0; c < BRICK_COLUMN_COUNT; c++) {
+				if (
+					isPaused ||
+					isGameOver ||
+					waitingToLaunch ||
+					isAnimatingRows
+				)
+					return false;
+				let collisionOccurred = false;
+				const yOffset = isAnimatingRows ? animationCurrentY : 0;
+				for (let c = 0; c < BRICK_COLUMN_COUNT; c++) {
 					for (let r = 0; r < BRICK_ROW_COUNT; r++) {
-                        if (bricks[c] && bricks[c][r]) {
-                            const brick = bricks[c][r];
-                            const brickTop = brick.y + yOffset;
-                            const brickBottom = brick.y + brick.height + yOffset;
-                            const brickLeft = brick.x;
-                            const brickRight = brick.x + brick.width;
-
-                            if ( ball.x + ball.radius > brickLeft && ball.x - ball.radius < brickRight &&
-                                 ball.y + ball.radius > brickTop && ball.y - ball.radius < brickBottom ) {
-                                const brickCenterX = brick.x + brick.width / 2;
-                                const brickCenterY = brick.y + brick.height / 2 + yOffset;
-                                createBrickShatterEffect(brickCenterX, brickCenterY, brick.width, brick.height, brick.color);
-                                createShatterEffect(brickCenterX, brickCenterY, brick.color);
-                                score++;
-                                if (score > 0 && score % SCORE_FOR_EXTRA_LIFE === 0) { lives++; }
-                                bricks[c][r] = null; // Remove brick
-                                collisionOccurred = true;
+						if (bricks[c] && bricks[c][r]) {
+							const brick = bricks[c][r];
+							const brickTop = brick.y + yOffset;
+							const brickBottom =
+								brick.y + brick.height + yOffset;
+							const brickLeft = brick.x;
+							const brickRight = brick.x + brick.width;
+							// Check for overlap between ball and brick bounding box
+							if (
+								ball.x + ball.radius > brickLeft &&
+								ball.x - ball.radius < brickRight &&
+								ball.y + ball.radius > brickTop &&
+								ball.y - ball.radius < brickBottom
+							) {
+								const brickCenterX = brick.x + brick.width / 2;
+								const brickCenterY =
+									brick.y + brick.height / 2 + yOffset;
+								createBrickShatterEffect(
+									brickCenterX,
+									brickCenterY,
+									brick.width,
+									brick.height,
+									brick.color
+								);
+								createShatterEffect(
+									brickCenterX,
+									brickCenterY,
+									brick.color
+								);
+								score++;
+								if (
+									score > 0 &&
+									score % SCORE_FOR_EXTRA_LIFE === 0
+								) {
+									lives++;
+								}
+								bricks[c][r] = null; // Destroy brick
+								collisionOccurred = true;
+								// --- CRITICAL: No ball.dy = -ball.dy or ball.dx = -ball.dx here ---
+								// This ensures the ball passes through while breaking
 							}
 						}
 					}
 				}
-                return collisionOccurred;
+				return collisionOccurred;
 			}
 
-            function checkAndShiftRows() {
-                 if (isPaused || isGameOver || isAnimatingRows) return;
-                 let lowestActiveRow = -1;
-                 for (let r = BRICK_ROW_COUNT - 1; r >= 0; r--) {
-                     for (let c = 0; c < BRICK_COLUMN_COUNT; c++) {
-                         if (bricks[c] && bricks[c][r]) { lowestActiveRow = r; break; }
-                     }
-                     if (lowestActiveRow !== -1) break;
-                 }
-                 const shiftAmount = (lowestActiveRow === -1) ? BRICK_ROW_COUNT : (BRICK_ROW_COUNT - 1) - lowestActiveRow;
-                 if (shiftAmount > 0) {
-                     rowsAdvanced += shiftAmount; isAnimatingRows = true; rowsToShiftAmount = shiftAmount;
-                     animationTargetY = shiftAmount * ROW_HEIGHT; animationCurrentY = 0;
-                 }
-             }
+			function checkAndShiftRows() {
+				if (isPaused || isGameOver || isAnimatingRows) return;
+				let lowestActiveRow = -1;
+				for (let r = BRICK_ROW_COUNT - 1; r >= 0; r--) {
+					for (let c = 0; c < BRICK_COLUMN_COUNT; c++) {
+						if (bricks[c] && bricks[c][r]) {
+							lowestActiveRow = r;
+							break;
+						}
+					}
+					if (lowestActiveRow !== -1) break;
+				}
+				const shiftAmount =
+					lowestActiveRow === -1
+						? BRICK_ROW_COUNT
+						: BRICK_ROW_COUNT - 1 - lowestActiveRow;
+				if (shiftAmount > 0) {
+					rowsAdvanced += shiftAmount;
+					isAnimatingRows = true;
+					rowsToShiftAmount = shiftAmount;
+					animationTargetY = shiftAmount * ROW_HEIGHT;
+					animationCurrentY = 0;
+				}
+			}
 
-            function updateRowAnimation() {
-                if (!isAnimatingRows) return;
-                animationCurrentY += ROW_ANIMATION_SPEED;
-                if (animationCurrentY >= animationTargetY) {
-                    animationCurrentY = animationTargetY; // Clamp
-                    // Perform Data Shift
-                    for (let r = BRICK_ROW_COUNT - 1; r >= 0 ; r--) {
-                        for (let c = 0; c < BRICK_COLUMN_COUNT; c++) {
-                           const targetRow = r + rowsToShiftAmount;
-                           if (targetRow < BRICK_ROW_COUNT && bricks[c]) {
-                                bricks[c][targetRow] = bricks[c][r] ? {...bricks[c][r]} : null;
-                                if (bricks[c][targetRow]) { bricks[c][targetRow].y = targetRow * ROW_HEIGHT + BRICK_OFFSET_TOP; }
-                           }
-                        }
-                    }
-                    // Generate new bricks
-                    for (let r = 0; r < rowsToShiftAmount; r++) {
-                        for (let c = 0; c < BRICK_COLUMN_COUNT; c++) {
-                            if (!bricks[c]) bricks[c] = [];
-                            bricks[c][r] = createBrick(c, r);
-                        }
-                    }
-                    // Finish Animation
-                    isAnimatingRows = false; animationTargetY = 0; animationCurrentY = 0; rowsToShiftAmount = 0;
-                }
-            }
+			function updateRowAnimation() {
+				if (!isAnimatingRows) return;
+				animationCurrentY += ROW_ANIMATION_SPEED;
+				if (animationCurrentY >= animationTargetY) {
+					animationCurrentY = animationTargetY;
+					for (let r = BRICK_ROW_COUNT - 1; r >= 0; r--) {
+						for (let c = 0; c < BRICK_COLUMN_COUNT; c++) {
+							const targetRow = r + rowsToShiftAmount;
+							if (targetRow < BRICK_ROW_COUNT && bricks[c]) {
+								bricks[c][targetRow] = bricks[c][r]
+									? { ...bricks[c][r] }
+									: null;
+								if (bricks[c][targetRow]) {
+									bricks[c][targetRow].y =
+										targetRow * ROW_HEIGHT +
+										BRICK_OFFSET_TOP;
+								}
+							}
+						}
+					}
+					for (let r = 0; r < rowsToShiftAmount; r++) {
+						for (let c = 0; c < BRICK_COLUMN_COUNT; c++) {
+							if (!bricks[c]) bricks[c] = [];
+							bricks[c][r] = createBrick(c, r);
+						}
+					}
+					isAnimatingRows = false;
+					animationTargetY = 0;
+					animationCurrentY = 0;
+					rowsToShiftAmount = 0;
+				}
+			}
 
 			// --- Effect Creation Functions ---
-			function createShatterEffect(x, y, color) { // Particle burst
+			function createShatterEffect(x, y, color) {
 				for (let i = 0; i < PARTICLE_COUNT; i++) {
-                    particles.push({ x: x, y: y, dx: (Math.random() - 0.5) * PARTICLE_SPEED_FACTOR * 2, dy: (Math.random() - 0.5) * PARTICLE_SPEED_FACTOR * 2, life: PARTICLE_LIFE + Math.random() * 10, color: color, size: PARTICLE_SIZE + Math.random() * 1 });
-                }
-            }
+					particles.push({
+						x: x,
+						y: y,
+						dx: (Math.random() - 0.5) * PARTICLE_SPEED_FACTOR * 2,
+						dy: (Math.random() - 0.5) * PARTICLE_SPEED_FACTOR * 2,
+						life: PARTICLE_LIFE + Math.random() * 10,
+						color: color,
+						size: PARTICLE_SIZE + Math.random() * 1,
+					});
+				}
+			}
+			function createBrickShatterEffect(
+				centerX,
+				centerY,
+				brickWidth,
+				brickHeight,
+				color
+			) {
+				const maxShardRadius =
+					Math.min(brickWidth, brickHeight) * SHARD_SIZE_FACTOR;
+				for (let i = 0; i < NUM_SHATTER_PIECES; i++) {
+					const angle1 = Math.random() * Math.PI * 2;
+					const angle2 =
+						angle1 + ((Math.random() * 0.8 + 0.8) * Math.PI) / 2;
+					const angle3 =
+						angle2 + ((Math.random() * 0.8 + 0.8) * Math.PI) / 2;
+					const radius1 = Math.random() * maxShardRadius;
+					const radius2 = Math.random() * maxShardRadius;
+					const radius3 = Math.random() * maxShardRadius;
+					const vertices = [
+						{
+							x: Math.cos(angle1) * radius1,
+							y: Math.sin(angle1) * radius1,
+						},
+						{
+							x: Math.cos(angle2) * radius2,
+							y: Math.sin(angle2) * radius2,
+						},
+						{
+							x: Math.cos(angle3) * radius3,
+							y: Math.sin(angle3) * radius3,
+						},
+					];
+					shatterPieces.push({
+						x: centerX,
+						y: centerY,
+						vertices: vertices,
+						dx:
+							(Math.random() - 0.5) *
+							SHATTER_INITIAL_DX_RANGE *
+							2,
+						dy:
+							Math.random() * SHATTER_INITIAL_DY_RANGE -
+							SHATTER_INITIAL_DY_RANGE / 2,
+						angle: Math.random() * Math.PI * 2,
+						dAngle:
+							(Math.random() - 0.5) *
+							SHATTER_ROTATION_SPEED_RANGE *
+							2,
+						color: color,
+						gravity: SHATTER_GRAVITY + (Math.random() - 0.5) * 0.05,
+					});
+				}
+			}
 
-            function createBrickShatterEffect(centerX, centerY, brickWidth, brickHeight, color) { // Falling shards
-                const maxShardRadius = Math.min(brickWidth, brickHeight) * SHARD_SIZE_FACTOR;
-                for (let i = 0; i < NUM_SHATTER_PIECES; i++) {
-                    const angle1 = Math.random() * Math.PI * 2; const angle2 = angle1 + (Math.random() * 0.8 + 0.8) * Math.PI / 2; const angle3 = angle2 + (Math.random() * 0.8 + 0.8) * Math.PI / 2;
-                    const radius1 = Math.random() * maxShardRadius; const radius2 = Math.random() * maxShardRadius; const radius3 = Math.random() * maxShardRadius;
-                    const vertices = [ { x: Math.cos(angle1) * radius1, y: Math.sin(angle1) * radius1 }, { x: Math.cos(angle2) * radius2, y: Math.sin(angle2) * radius2 }, { x: Math.cos(angle3) * radius3, y: Math.sin(angle3) * radius3 }, ];
-                    shatterPieces.push({ x: centerX, y: centerY, vertices: vertices, dx: (Math.random() - 0.5) * SHATTER_INITIAL_DX_RANGE * 2, dy: Math.random() * SHATTER_INITIAL_DY_RANGE - SHATTER_INITIAL_DY_RANGE/2, angle: Math.random() * Math.PI * 2, dAngle: (Math.random() - 0.5) * SHATTER_ROTATION_SPEED_RANGE * 2, color: color, gravity: SHATTER_GRAVITY + (Math.random() - 0.5) * 0.05 });
-                }
-            }
-
-            // --- Effect Update Functions ---
-			function updateParticles() { // Update particle burst
+			// --- Effect Update Functions ---
+			function updateParticles() {
 				for (let i = particles.length - 1; i >= 0; i--) {
-                    const p = particles[i]; p.x += p.dx; p.y += p.dy; p.dy += 0.06; p.life--;
-                    if (p.life <= 0) { particles.splice(i, 1); }
-                }
-            }
+					const p = particles[i];
+					p.x += p.dx;
+					p.y += p.dy;
+					p.dy += 0.06;
+					p.life--;
+					if (p.life <= 0) {
+						particles.splice(i, 1);
+					}
+				}
+			}
+			function updateShatterPieces() {
+				for (let i = shatterPieces.length - 1; i >= 0; i--) {
+					const p = shatterPieces[i];
+					p.dy += p.gravity;
+					p.x += p.dx;
+					p.y += p.dy;
+					p.angle += p.dAngle;
+					if (p.y > canvas.height + 50) {
+						shatterPieces.splice(i, 1);
+					}
+				}
+			}
 
-            function updateShatterPieces() { // Update falling shards
-                for (let i = shatterPieces.length - 1; i >= 0; i--) {
-                    const p = shatterPieces[i]; p.dy += p.gravity; p.x += p.dx; p.y += p.dy; p.angle += p.dAngle;
-                    if (p.y > canvas.height + 50) { shatterPieces.splice(i, 1); }
-                }
-            }
+			// --- Debug Function ---
+			function toggleDebugMode() {
+				isDebugMode = !isDebugMode;
+				debugSpeedMultiplier = isDebugMode ? 5 : 1;
+				console.log(
+					"Debug Mode:",
+					isDebugMode ? "ON" : "OFF",
+					"- Speed Multiplier:",
+					debugSpeedMultiplier
+				);
+				debugIndicator.style.display = isDebugMode ? "block" : "none";
+			}
 
-            // --- Debug Function ---
-            function toggleDebugMode() {
-                isDebugMode = !isDebugMode; debugSpeedMultiplier = isDebugMode ? 5 : 1;
-                console.log("Debug Mode:", isDebugMode ? "ON" : "OFF", "- Speed Multiplier:", debugSpeedMultiplier);
-                debugIndicator.style.display = isDebugMode ? 'block' : 'none';
-             }
-
-            // --- Helper to get Event Coordinates ---
-            function getCanvasCoordinates(event) {
-                const rect = canvas.getBoundingClientRect();
-                let x, y;
-                if (event.touches && event.touches.length > 0) { // Touch event
-                    x = event.touches[0].clientX - rect.left;
-                    y = event.touches[0].clientY - rect.top;
-                } else if (event.clientX !== undefined) { // Mouse event
-                    x = event.clientX - rect.left;
-                    y = event.clientY - rect.top;
-                } else {
-                    return null; // Unknown event type
-                }
-                // Scale coordinates if canvas is visually scaled by CSS
-                const scaleX = canvas.width / rect.width;
-                const scaleY = canvas.height / rect.height;
-                return { x: x * scaleX, y: y * scaleY };
-            }
+			// --- Helper to get Event Coordinates ---
+			function getCanvasCoordinates(event) {
+				const rect = canvas.getBoundingClientRect();
+				let x, y;
+				if (event.touches && event.touches.length > 0) {
+					x = event.touches[0].clientX - rect.left;
+					y = event.touches[0].clientY - rect.top;
+				} else if (event.clientX !== undefined) {
+					x = event.clientX - rect.left;
+					y = event.clientY - rect.top;
+				} else {
+					return null;
+				}
+				const scaleX = canvas.width / rect.width;
+				const scaleY = canvas.height / rect.height;
+				return { x: x * scaleX, y: y * scaleY };
+			}
 
 			// --- Input Handlers ---
 			function keyDownHandler(e) {
-                if (e.key === "Escape" && !isGameOver) { isPaused = !isPaused; e.preventDefault(); return; } // Pause/Resume
-                if ( (e.code === "Space" || e.key === " ") && isGameOver ) { if (animationFrameId) cancelAnimationFrame(animationFrameId); animationFrameId = null; initGame(); e.preventDefault(); return; } // Restart
-                if (e.key === 't' || e.key === 'T') { toggleDebugMode(); e.preventDefault(); return; } // Debug Toggle
-
-                if (!isPaused && !isGameOver && !isAnimatingRows) { // Paddle Movement
-					if (e.key === "Right" || e.key === "ArrowRight" || e.key === "d" || e.key === "D") rightPressed = true;
-					else if (e.key === "Left" || e.key === "ArrowLeft" || e.key === "a" || e.key === "A") leftPressed = true;
+				if (e.key === "Escape" && !isGameOver) {
+					isPaused = !isPaused;
+					e.preventDefault();
+					return;
 				}
-				// Prevent default for game keys
-				if (["ArrowLeft", "ArrowRight", " ", "a", "A", "d", "D", "Escape", "t", "T"].includes(e.key)) e.preventDefault();
+				// Allow Space/Click/Tap to restart from Game Over or Pause
+				if ((e.code === "Space" || e.key === " ") && isGameOver) {
+					if (animationFrameId)
+						cancelAnimationFrame(animationFrameId);
+					animationFrameId = null;
+					initGame();
+					e.preventDefault();
+					return;
+				}
+				// Toggle Debug
+				if (e.key === "t" || e.key === "T") {
+					toggleDebugMode();
+					e.preventDefault();
+					return;
+				}
+				// Paddle Movement
+				if (!isPaused && !isGameOver && !isAnimatingRows) {
+					if (
+						e.key === "Right" ||
+						e.key === "ArrowRight" ||
+						e.key === "d" ||
+						e.key === "D"
+					)
+						rightPressed = true;
+					else if (
+						e.key === "Left" ||
+						e.key === "ArrowLeft" ||
+						e.key === "a" ||
+						e.key === "A"
+					)
+						leftPressed = true;
+				}
+				// Prevent default for game-related keys
+				if (
+					[
+						"ArrowLeft",
+						"ArrowRight",
+						" ",
+						"a",
+						"A",
+						"d",
+						"D",
+						"Escape",
+						"t",
+						"T",
+					].includes(e.key)
+				)
+					e.preventDefault();
 			}
 
 			function keyUpHandler(e) {
-				if (e.key === "Right" || e.key === "ArrowRight" || e.key === "d" || e.key === "D") rightPressed = false;
-				else if (e.key === "Left" || e.key === "ArrowLeft" || e.key === "a" || e.key === "A") leftPressed = false;
-                if (["ArrowLeft", "ArrowRight", "a", "A", "d", "D", "t", "T"].includes(e.key)) e.preventDefault();
+				if (
+					e.key === "Right" ||
+					e.key === "ArrowRight" ||
+					e.key === "d" ||
+					e.key === "D"
+				)
+					rightPressed = false;
+				else if (
+					e.key === "Left" ||
+					e.key === "ArrowLeft" ||
+					e.key === "a" ||
+					e.key === "A"
+				)
+					leftPressed = false;
+				// Prevent default for game-related keys
+				if (
+					[
+						"ArrowLeft",
+						"ArrowRight",
+						"a",
+						"A",
+						"d",
+						"D",
+						"t",
+						"T",
+					].includes(e.key)
+				)
+					e.preventDefault();
 			}
 
-            function clickHandler(e) {
-                const coords = getCanvasCoordinates(e);
-                if (!coords) return;
+			function clickHandler(e) {
+				const coords = getCanvasCoordinates(e);
+				if (!coords) return;
+				// Check pause button click
+				if (
+					!isGameOver &&
+					coords.x >= PAUSE_BUTTON_X &&
+					coords.x <= PAUSE_BUTTON_X + PAUSE_BUTTON_SIZE &&
+					coords.y >= PAUSE_BUTTON_Y &&
+					coords.y <= PAUSE_BUTTON_Y + PAUSE_BUTTON_SIZE
+				) {
+					isPaused = !isPaused;
+					if (!isPaused) {
+						isTouchActive = false;
+						touchTargetX = null;
+					}
+					e.preventDefault();
+				} else if (isGameOver) {
+					// Restart on click anywhere else if game over
+					if (animationFrameId)
+						cancelAnimationFrame(animationFrameId);
+					animationFrameId = null;
+					initGame();
+					e.preventDefault();
+				} else if (isPaused) {
+					// Unpause on click anywhere else (except button) if paused
+					isPaused = false;
+					isTouchActive = false;
+					touchTargetX = null;
+					e.preventDefault();
+				}
+			}
 
-                // Check if pause button was clicked
-                if (!isGameOver && coords.x >= PAUSE_BUTTON_X && coords.x <= PAUSE_BUTTON_X + PAUSE_BUTTON_SIZE &&
-                    coords.y >= PAUSE_BUTTON_Y && coords.y <= PAUSE_BUTTON_Y + PAUSE_BUTTON_SIZE) {
-                    isPaused = !isPaused;
-                    // If resuming, reset touch state to avoid accidental paddle movement
-                    if (!isPaused) {
-                        isTouchActive = false;
-                        touchTargetX = null;
-                    }
-                    e.preventDefault();
-                } else if (isGameOver) { // Allow restart on click
-                    if (animationFrameId) cancelAnimationFrame(animationFrameId); animationFrameId = null; initGame(); e.preventDefault();
-                }
-            }
+			function touchStartHandler(e) {
+				const coords = getCanvasCoordinates(e);
+				if (!coords) return;
+				// Check pause button FIRST
+				if (
+					!isGameOver &&
+					coords.x >= PAUSE_BUTTON_X &&
+					coords.x <= PAUSE_BUTTON_X + PAUSE_BUTTON_SIZE &&
+					coords.y >= PAUSE_BUTTON_Y &&
+					coords.y <= PAUSE_BUTTON_Y + PAUSE_BUTTON_SIZE
+				) {
+					isPaused = !isPaused;
+					if (!isPaused) {
+						isTouchActive = false;
+						touchTargetX = null;
+					}
+					e.preventDefault();
+					return;
+				}
+				// Restart on touch if game over
+				if (isGameOver) {
+					if (animationFrameId)
+						cancelAnimationFrame(animationFrameId);
+					animationFrameId = null;
+					initGame();
+					e.preventDefault();
+					return;
+				}
+				// Unpause on touch anywhere else (except button) if paused
+				if (isPaused) {
+					isPaused = false;
+					isTouchActive = false; // Don't immediately start moving paddle
+					touchTargetX = null;
+					e.preventDefault();
+					return; // Don't process paddle movement on the same touch that unpauses
+				}
+				// Normal paddle control touch
+				if (!isPaused && !isAnimatingRows) {
+					isTouchActive = true;
+					touchTargetX = coords.x;
+					e.preventDefault();
+				}
+			}
 
-            function touchStartHandler(e) {
-                const coords = getCanvasCoordinates(e);
-                 if (!coords) return;
+			function touchMoveHandler(e) {
+				if (
+					isTouchActive &&
+					!isPaused &&
+					!isGameOver &&
+					!isAnimatingRows
+				) {
+					const coords = getCanvasCoordinates(e);
+					if (coords) {
+						touchTargetX = coords.x;
+						e.preventDefault();
+					}
+				}
+			}
 
-                // Check pause button FIRST
-                if (!isGameOver && coords.x >= PAUSE_BUTTON_X && coords.x <= PAUSE_BUTTON_X + PAUSE_BUTTON_SIZE &&
-                    coords.y >= PAUSE_BUTTON_Y && coords.y <= PAUSE_BUTTON_Y + PAUSE_BUTTON_SIZE) {
-                    isPaused = !isPaused;
-                     // If resuming, reset touch state
-                    if (!isPaused) {
-                        isTouchActive = false;
-                        touchTargetX = null;
-                    }
-                    e.preventDefault();
-                    return; // Don't process paddle movement if pause button was hit
-                }
-
-                // Restart on touch if game over
-                if (isGameOver) {
-                    if (animationFrameId) cancelAnimationFrame(animationFrameId); animationFrameId = null; initGame(); e.preventDefault();
-                    return;
-                }
-
-                // If not paused/game over/animating, handle paddle movement
-                if (!isPaused && !isAnimatingRows) {
-                    isTouchActive = true;
-                    touchTargetX = coords.x; // Store target X for updatePaddle
-                    e.preventDefault();
-                }
-            }
-
-            function touchMoveHandler(e) {
-                 if (isTouchActive && !isPaused && !isGameOver && !isAnimatingRows) {
-                    const coords = getCanvasCoordinates(e);
-                    if (coords) {
-                        touchTargetX = coords.x; // Update target X as finger moves
-                        e.preventDefault();
-                    }
-                 }
-            }
-
-            function touchEndHandler(e) {
-                // Stop paddle movement when touch ends
-                isTouchActive = false;
-                touchTargetX = null;
-                // Don't prevent default here, might interfere with other UI elements if added later
-            }
+			function touchEndHandler(e) {
+				// Only reset touch if not interacting with pause button
+				// (Pause button handles its own state changes)
+				if (isTouchActive) {
+					isTouchActive = false;
+					touchTargetX = null;
+				}
+				// Prevent default doesn't seem necessary here but can be added if issues arise
+				// e.preventDefault();
+			}
 
 			// --- Event Listeners Setup ---
 			document.addEventListener("keydown", keyDownHandler, false);
 			document.addEventListener("keyup", keyUpHandler, false);
-            // Mouse click for pause button / restart
-            canvas.addEventListener("click", clickHandler, false);
-            // Touch events for pause button / restart / paddle control
-            canvas.addEventListener("touchstart", touchStartHandler, { passive: false });
-            canvas.addEventListener("touchmove", touchMoveHandler, { passive: false });
-            canvas.addEventListener("touchend", touchEndHandler, false);
-            canvas.addEventListener("touchcancel", touchEndHandler, false); // Treat cancel like end
-
+			canvas.addEventListener("click", clickHandler, false);
+			canvas.addEventListener("touchstart", touchStartHandler, {
+				passive: false,
+			});
+			canvas.addEventListener("touchmove", touchMoveHandler, {
+				passive: false,
+			});
+			canvas.addEventListener("touchend", touchEndHandler, false);
+			canvas.addEventListener("touchcancel", touchEndHandler, false);
 
 			// --- Game Loop ---
 			function gameLoop() {
 				// 1. Clear Canvas
-				ctx.fillStyle = BG_COLOR; ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-                // 2. Update Game State
-                updateRowAnimation();       updateLaunchDelay();
-				updatePaddle();             updateBall();
+				ctx.fillStyle = BG_COLOR;
+				ctx.fillRect(0, 0, canvas.width, canvas.height);
+				// 2. Update State
+				updateRowAnimation();
+				updateLaunchDelay();
+				updatePaddle();
+				updateBall();
 				const ballCollisionHappened = brickCollision();
-                updateParticles();          updateShatterPieces();
-
-                // 3. Check Game Logic Conditions
-                if (ballCollisionHappened && !isPaused && !isGameOver && !isAnimatingRows) { checkAndShiftRows(); }
-
-				// 4. Draw Game Elements
-				drawBricks();               drawShatterPieces();
-				drawPaddle();               drawBall();
-				drawParticles();            drawScore();
-				drawLives();                drawPauseButton(); // Draw pause button on top
-
-                // 5. Draw Overlay Messages
+				updateParticles();
+				updateShatterPieces();
+				// 3. Check Conditions
+				if (
+					ballCollisionHappened &&
+					!isPaused &&
+					!isGameOver &&
+					!isAnimatingRows
+				) {
+					checkAndShiftRows();
+				}
+				// 4. Draw Elements (Order matters for layering)
+				drawBricks(); // Base layer
+				drawShatterPieces(); // Falling debris
+				drawPaddle(); // Paddle
+				drawBall(); // Ball
+				drawParticles(); // Particle burst (often on top)
+				// --- UI DRAWING (SWAPPED) ---
+				drawScore(); // UI Text Score (Top Left)
+				drawLives(); // UI Text Lives (Top Right)
+				drawPauseButton(); // UI Button (Top Center)
+				// 5. Draw Overlays (Drawn last, over everything except maybe debug text)
 				if (isGameOver) drawMessage("GAME OVER", GAMEOVER_COLOR);
 				else if (isPaused) drawPauseMessage();
-
-                // 6. Request Next Frame
+				// 6. Next Frame
 				animationFrameId = requestAnimationFrame(gameLoop);
 			}
 
 			// --- Start Game ---
 			initGame();
-
 		</script>
 	</body>
 </html>
