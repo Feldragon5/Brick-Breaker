@@ -119,7 +119,7 @@
 		lives = 3;
 		isGameOver = false;
 		isPaused = false;
-		debugSpeedMultiplier = isDebugMode ? 5 : 1; // Set speed based on debug mode
+		debugSpeedMultiplier = 1;
 		particles = [];
 		shatterPieces = [];
 		rightPressed = false;
